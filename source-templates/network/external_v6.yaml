@@ -1,0 +1,269 @@
+
+heat_template_version: wallaby
+
+description: >
+  External network definition (automatically generated).
+
+parameters:
+  # the defaults here work for static IP assignment (IPAM) only
+  ExternalNetCidr:
+    default: ""
+    description: Cidr for the external network.
+    type: string
+  ExternalNetValueSpecs:
+    default: {'provider:physical_network': 'external', 'provider:network_type': 'flat'}
+    description: Value specs for the external network.
+    type: json
+  ExternalNetEnableDHCP:
+    default: false
+    description: Whether to enable DHCP on the associated subnet.
+    type: boolean
+  ExternalNetAdminStateUp:
+    default: false
+    description: The admin state of the network.
+    type: boolean
+  ExternalNetShared:
+    default: false
+    description: Whether this network is shared across all tenants.
+    type: boolean
+  ExternalNetName:
+    default: external
+    description: The name of the external network.
+    type: string
+  ExternalSubnetName:
+    default: external_subnet
+    description: The name of the external subnet in Neutron.
+    type: string
+  ExternalAllocationPools:
+    default: []
+    description: Ip allocation pool range for the external network.
+    type: json
+  IPv6AddressMode:
+    default: dhcpv6-stateful
+    description: Neutron subnet IPv6 address mode
+    type: string
+  IPv6RAMode:
+    default: dhcpv6-stateful
+    description: Neutron subnet IPv6 router advertisement mode
+    type: string
+  ExternalInterfaceDefaultRoute:
+    default: ""
+    description: default route for the external network
+    type: string
+  ExternalNetworkVlanID:
+    default: 1
+    description: Vlan ID for the external network traffic.
+    type: number
+  ExternalRoutes:
+    default: []
+    description: >
+      Routes for the external network traffic.
+      JSON route e.g. [{'destination':'10.0.0.0/16', 'nexthop':'10.0.0.1'}]
+      Routes are added to the host_routes property on the subnet in neutron
+      when the network and subnet is created.
+    type: json
+  ExternalMtu:
+    default: 1500
+    description: The maximum transmission unit (MTU) size(in bytes) that is
+      guaranteed to pass through the data path of the segments in the
+      External network.
+    type: number
+  ExternalSubnetCidr_external_subnet:
+    default: "192.168.131.0/25"
+    description: |
+      Cidr for the external network's external_subnet subnet.
+    type: string
+  ExternalAllocationPools_external_subnet:
+    default: [{'start': '192.168.131.60', 'end': '192.168.131.100'}]
+    description: |
+      Ip allocation pool range for the external network's external_subnet subnet.
+    type: json
+  ExternalInterfaceDefaultRoute_external_subnet:
+    default: "192.168.131.1"
+    description: |
+       default route for the external network's external_subnet subnet.
+    type: string
+  ExternalNetworkVlanID_external_subnet:
+    default: 1
+    description: |
+      Vlan ID for the external network's external_subnet subnet.
+    type: number
+  ExternalRoutes_external_subnet:
+    default: []
+    description: >
+      Routes for the external_subnet subnet on external network
+      traffic. JSON route e.g. [{'destination':'10.0.0.0/16', 'nexthop':'10.0.0.1'}]
+      Routes are added to the host_routes property on the subnet in neutron
+      when the subnet is created.
+    type: json
+  ManageNetworks:
+    default: true
+    type: boolean
+    description: >
+      Manage the network and related resources (subnets and segments) with
+      either create, update, or delete operations (depending on the stack
+      operation). Does not apply to ports which will always be managed as
+      needed. Defaults to true. For multi-stack use cases where the network
+      related resources have already been managed by a separate stack, this
+      parameter can be set to false.
+  CloudDomain:
+    default: 'localdomain'
+    type: string
+    description: >
+      The DNS domain used for the hosts. This must match the
+      overcloud_domain_name configured on the undercloud.
+  NetworkDeletionPolicy:
+    description: >
+      Whether to retain or delete network resource on deletion of the stack
+    type: string
+    default: delete
+    constraints:
+      - allowed_values: [delete, retain]
+
+
+conditions:
+  manage_networks: {get_param: ManageNetworks}
+  is_ipv6:
+    yaql:
+      expression: '":" in $.data'
+      data: {get_param: ExternalNetCidr}
+
+resources:
+  ExternalNetwork:
+    type: OS::Neutron::Net
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    properties:
+      admin_state_up: {get_param: ExternalNetAdminStateUp}
+      name: {get_param: ExternalNetName}
+      dns_domain:
+        list_join:
+          - '.'
+          - - external
+            - {get_param: CloudDomain}
+            - ''
+      shared: {get_param: ExternalNetShared}
+      value_specs:
+        map_merge:
+          - {get_param: ExternalNetValueSpecs}
+          - {'mtu': {get_param: ExternalMtu}}
+      tags:
+        - tripleo_net_idx=0
+        - tripleo_network_name=External
+        - tripleo_vip=True
+        - tripleo_ipv6=true
+
+  ExternalSubnet:
+    type: OS::Neutron::Subnet
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    properties:
+      cidr: {get_param: ExternalNetCidr}
+      name: {get_param: ExternalSubnetName}
+      network: {get_resource: ExternalNetwork}
+      allocation_pools: {get_param: ExternalAllocationPools}
+      gateway_ip: {get_param: ExternalInterfaceDefaultRoute}
+      host_routes: {get_param: ExternalRoutes}
+      # All networks have an implicit network segment when created, map this subnet to that segment.
+      segment: {get_attr: [ExternalNetwork, segments, 0, id]}
+      ip_version: {if: [is_ipv6, 6, 4]}
+      ipv6_address_mode: {get_param: IPv6AddressMode}
+      ipv6_ra_mode: {get_param: IPv6RAMode}
+      tags:
+        - str_replace:
+            template: tripleo_vlan_id=$vlan_id
+            params:
+              $vlan_id: {get_param: ExternalNetworkVlanID}
+
+
+
+  ExternalSegment_external_subnet:
+    type: OS::Neutron::Segment
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    # NOTE(hjensas): Depends-On here to ensure we always create the base subnet
+    #   first. We can only set the segment for existing subnet if there is only
+    #   one segment and only one existing subnet on the network.
+    depends_on: ExternalSubnet
+    properties:
+      name: external_external_subnet
+      network: {get_resource: ExternalNetwork}
+      network_type: flat
+      physical_network: external_external_subnet
+
+  ExternalSubnet_external_subnet:
+    type: OS::Neutron::Subnet
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    properties:
+      cidr: {get_param: ExternalSubnetCidr_external_subnet}
+      name: external_subnet
+      network: {get_resource: ExternalNetwork}
+      allocation_pools: {get_param: ExternalAllocationPools_external_subnet}
+      gateway_ip: {get_param: ExternalInterfaceDefaultRoute_external_subnet}
+      host_routes: {get_param: ExternalRoutes_external_subnet}
+      segment: {get_resource: ExternalSegment_external_subnet}
+      ip_version: {if: [is_ipv6, 6, 4]}
+      ipv6_address_mode: {get_param: IPv6AddressMode}
+      ipv6_ra_mode: {get_param: IPv6RAMode}
+      tags:
+        - str_replace:
+            template: tripleo_vlan_id=$vlan_id
+            params:
+              $vlan_id: {get_param: ExternalNetworkVlanID_external_subnet}
+
+
+
+outputs:
+  OS::stack_id:
+    description: external network
+    value: {get_resource: ExternalNetwork}
+  ip_version:
+    description: IP version of External network.
+    value: {if: [is_ipv6, 6, 4]}
+  network_cidrs:
+    description: List of External network's subnets in CIDR notation.
+    value:
+      if:
+        - manage_networks
+        - - {get_attr: [ExternalSubnet, cidr]}
+          - {get_attr: [ExternalSubnet_external_subnet, cidr]}
+        - - {get_param: ExternalNetCidr}
+          - {get_param: ExternalSubnetCidr_external_subnet}
+
+  network_attrs:
+    description: External network's attributes
+    value:
+      if:
+        - manage_networks
+        - {get_attr: [ExternalNetwork, show]}
+        - name: external
+          dns_domain:
+            list_join:
+            - '.'
+            - - external
+              - {get_param: CloudDomain}
+              - ''
+          mtu: 1500
+
+  subnet_attrs:
+    description: Map of attributes for subnets in the External network
+    value:
+      if:
+        - manage_networks
+        - external_subnet: {get_attr: [ExternalSubnet, show]}
+          external_subnet: {get_attr: [ExternalSubnet_external_subnet, show]}
+        - external_subnet:
+            name: external_subnet
+            cidr: {get_param: ExternalNetCidr}
+            dns_nameservers: []
+            gateway_ip: {get_param: ExternalInterfaceDefaultRoute}
+            host_routes: {get_param: ExternalRoutes}
+            ip_version: {if: [is_ipv6, 6, 4]}
+          external_subnet:
+            name: external_subnet
+            cidr: {get_param: ExternalSubnetCidr_external_subnet}
+            dns_nameservers: []
+            gateway_ip: {get_param: ExternalInterfaceDefaultRoute_external_subnet}
+            host_routes: {get_param: ExternalRoutes_external_subnet}
+            ip_version: {if: [is_ipv6, 6, 4]}

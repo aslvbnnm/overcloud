@@ -1,0 +1,822 @@
+- block:
+  - include_role:
+      name: tripleo_run_cephadm
+      tasks_from: prepare.yml
+    name: create cephadm working directory and related files
+    vars:
+      ceph_config_overrides:
+        mgr:
+          mgr/cephadm/autotune_memory_target_ratio: 0.2
+        osd:
+          osd_memory_target_autotune: true
+          osd_numa_auto_affinity: true
+        rgw_swift_enforce_content_length: true
+        rgw_swift_versioning_enabled: true
+      ceph_default_overrides:
+        global: {}
+      ceph_keys:
+        extra_keys: []
+        manila:
+          key: AQC2IS5oAAAAABAABAAACQUABwMDBwIIBQQCCQ==
+          name: manila
+        openstack_client:
+          key: AQCxIS5oAAAAABAACAcGBwcHAwQHBwMDAAEDCQ==
+          name: openstack
+        radosgw:
+          key: AQCxIS5oAAAAABAAAgUBCQACAAgCBwUGBwIIAQ==
+          name: radosgw
+      ceph_osd_spec:
+        data_devices:
+          all: true
+      ceph_pools:
+        cinder_backup_pool:
+          enabled: true
+          name: backups
+        cinder_pool:
+          cinder_extra_pools: []
+          enabled: true
+          name: volumes
+        extra_pools: []
+        glance_pool:
+          enabled:
+            or:
+            - false
+            - equals:
+              - rbd
+              - rbd
+          name: images
+        gnocchi_pool:
+          enabled: false
+          name: metrics
+        nova_pool:
+          enabled: true
+          name: vms
+      ceph_spec_fqdn: true
+      cephadm_extra_vars:
+        ceph_container_registry_auth: true
+        ceph_container_registry_password: i.am.king.bison.6591
+        ceph_container_registry_username: grosenbe-redhat.com
+        cephfs: cephfs
+        cluster_network: 172.16.5.0/24
+        public_network: 172.16.4.0/24
+        tripleo_ceph_client_vars: '{{ playbook_dir }}/cephadm/ceph_client.yml'
+        tripleo_cephadm_apply_ceph_conf_overrides_on_update: false
+        tripleo_cephadm_cluster: ceph
+        tripleo_cephadm_container_cli: podman
+        tripleo_cephadm_container_image: rhceph/rhceph-6-rhel9
+        tripleo_cephadm_container_ns: registry.redhat.io
+        tripleo_cephadm_container_tag: 6-199
+        tripleo_cephadm_crush_rules: []
+        tripleo_cephadm_dashboard_enabled: false
+        tripleo_cephadm_debug: false
+        tripleo_cephadm_default_container: false
+        tripleo_cephadm_enable_trash_scheduler: false
+        tripleo_cephadm_fsid: d1afcd63-9dac-4853-8920-bfe986d806df
+        tripleo_cephadm_rbd_trash: '15'
+        tripleo_cephadm_verbose: false
+      manila_pools:
+        data: manila_data
+        metadata: manila_metadata
+      tripleo_cephadm_deployed_ceph: false
+      tripleo_cephadm_dynamic_spec: true
+      tripleo_run_cephadm_spec_path: '{{ playbook_dir }}/cephadm/ceph_spec.yaml'
+  - include_role:
+      name: tripleo_run_cephadm
+      tasks_from: enable_ceph_admin_user.yml
+    name: Prepare cephadm user and keys
+    vars:
+      deployed_ceph: false
+      external_ceph: false
+    when:
+    - not external_ceph
+    - (not deployed_ceph and (groups['ceph_mon'] | default([]) | length > 0 or groups['ceph_nfs']
+      | default([]) | length > 0)) or (deployed_ceph and ((groups['ceph_rgw'] | default([])
+      != groups['ceph_mon'] | default([]) and groups['ceph_rgw'] | default([]) | length
+      > 0) or (groups['ceph_mds'] | default([]) != groups['ceph_mon'] | default([])
+      and groups['ceph_mds'] | default([]) | length > 0) or (groups['ceph_nfs'] |
+      default([]) != groups['ceph_mon'] | default([]) and groups['ceph_nfs'] | default([])
+      | length > 0) or (groups['ceph_rbdmirror'] | default([]) != groups['ceph_mon']
+      | default([]) and groups['ceph_rbdmirror'] | default([]) | length > 0)))
+  - include_role:
+      name: tripleo_run_cephadm
+    name: Deploy or configure the cephadm Ceph cluster
+    vars:
+      external_ceph: false
+    when:
+    - not external_ceph
+    - groups['ceph_mon'] | default([]) | length > 0 or groups['ceph_nfs'] | default([])
+      | length > 0
+  name: ceph_base_external_deploy_task
+  when: step|int == 2
+- block:
+  - include_role:
+      name: tripleo_run_cephadm
+      tasks_from: disable_cephadm.yml
+    name: Pause cephadm
+  name: ceph_base_external_deploy_task
+  vars:
+    external_ceph: false
+  when:
+  - (step | int) == 3
+  - false
+  - not external_ceph
+- block:
+  - name: Set some tripleo-ansible facts
+    set_fact:
+      ceph_external_multi_config: []
+  name: ceph_base_external_deploy_init
+  when: step|int == 1
+- block:
+  - name: Check if the input variable file exists
+    register: ceph_input_vars
+    stat:
+      path: '{{ tripleo_ceph_client_vars }}'
+    vars:
+      tripleo_ceph_client_vars: '{{ playbook_dir }}/cephadm/ceph_client.yml'
+  - copy:
+      content: 'tripleo_ceph_client_fsid: "{{ tripleo_ceph_client_fsid }}"
+
+        external_cluster_mon_ips: "{{ external_cluster_mon_ips }}"
+
+        '
+      dest: '{{ tripleo_ceph_client_vars }}'
+    name: Populate CephClientConfigVars from THT
+    vars:
+      external_cluster_mon_ips: ''
+      tripleo_ceph_client_fsid: d1afcd63-9dac-4853-8920-bfe986d806df
+      tripleo_ceph_client_vars: '{{ playbook_dir }}/cephadm/ceph_client.yml'
+    when:
+    - ceph_input_vars.stat.exists == False
+    - external_cluster_mon_ips | length > 0
+  - include_role:
+      name: tripleo_ceph_client
+    name: configure ceph clients
+    vars:
+      tripleo_ceph_client_config_home: /var/lib/tripleo-config/ceph
+      tripleo_ceph_client_vars: '{{ playbook_dir }}/cephadm/ceph_client.yml'
+  - include_role:
+      name: tripleo_ceph_client
+    loop: '{{ ceph_external_multi_config }}'
+    name: tripleo client role
+    vars:
+      multiple: '{{ item }}'
+      tripleo_ceph_client_config_home: /var/lib/tripleo-config/ceph
+    when:
+    - ceph_external_multi_config is defined
+  - include_vars: '{{ playbook_dir }}/cephadm/cephadm-extra-vars-heat.yml'
+    name: Load variables for standalone ganesha
+    when:
+    - groups['ceph_mon'] | default([]) | length == 0
+    - groups['ceph_nfs'] | default([]) | length > 0
+  - include_role:
+      name: tripleo_cephadm
+      tasks_from: nfs
+    name: Config Standalone Ganesha
+    vars:
+      tripleo_cephadm_config_home: /var/lib/tripleo-config/ceph
+    when:
+    - groups['ceph_mon'] | default([]) | length == 0
+    - groups['ceph_nfs'] | default([]) | length > 0
+  name: Configure Ceph Clients
+  when: step|int == 2
+- become: true
+  loop:
+  - service_name: cinderv2
+    service_type: volumev2
+  - service_name: cinderv3
+    service_type: volume
+  loop_control:
+    index_var: cinder_api_service
+  name: Clean up legacy Cinder keystone catalog entries
+  openstack.cloud.catalog_service:
+    cloud: overcloud
+    name: '{{ item.service_name }}'
+    service_type: '{{ item.service_type }}'
+    state: absent
+  when:
+  - step|int == 4
+  - not ansible_check_mode|bool
+- args:
+    executable: /bin/bash
+  become: true
+  changed_when: false
+  environment:
+    OS_CLOUD: overcloud
+  name: Manage Cinder's default volume type
+  shell: "if ! openstack volume type show \"{{ default_volume_type }}\"; then\n  \
+    \  openstack volume type create --public \"{{ default_volume_type }}\"\nfi\neval\
+    \ $(openstack volume type show __DEFAULT__ -f shell -c id -c description)\nif\
+    \ [ -n \"$id\" ]; then\n    vols=$(openstack volume list -f value -c ID)\n   \
+    \ tripleo_descr=\"For internal use, '{{ default_volume_type }}' is the default\
+    \ volume type\"\n    if [ -z \"$vols\" ]; then\n        openstack volume type\
+    \ delete $id\n    elif [ \"$description\" != \"$tripleo_descr\" ]; then\n    \
+    \    openstack volume type set $id --description \"$tripleo_descr\"\n    fi\n\
+    fi\n"
+  vars:
+    default_volume_type: tripleo
+  when:
+  - step|int == 5
+  - not ansible_check_mode|bool
+- import_role:
+    name: tripleo_container_image_prepare
+  name: Run tripleo-container-image-prepare role
+  vars:
+    tripleo_container_image_prepare_content:
+      parameter_defaults:
+        AdditionalArchitectures: []
+        ComputeHCIContainerImagePrepare: {}
+        ComputeHCICount: 2
+        ComputeHCIServices:
+        - OS::TripleO::Services::Aide
+        - OS::TripleO::Services::AuditD
+        - OS::TripleO::Services::BootParams
+        - OS::TripleO::Services::CACerts
+        - OS::TripleO::Services::CephClient
+        - OS::TripleO::Services::CephExternal
+        - OS::TripleO::Services::CephOSD
+        - OS::TripleO::Services::Collectd
+        - OS::TripleO::Services::ComputeCeilometerAgent
+        - OS::TripleO::Services::CeilometerAgentIpmi
+        - OS::TripleO::Services::ComputeNeutronCorePlugin
+        - OS::TripleO::Services::ComputeNeutronL3Agent
+        - OS::TripleO::Services::ComputeNeutronMetadataAgent
+        - OS::TripleO::Services::ComputeNeutronOvsAgent
+        - OS::TripleO::Services::Frr
+        - OS::TripleO::Services::IpaClient
+        - OS::TripleO::Services::Ipsec
+        - OS::TripleO::Services::Iscsid
+        - OS::TripleO::Services::Kernel
+        - OS::TripleO::Services::LoginDefs
+        - OS::TripleO::Services::MetricsQdr
+        - OS::TripleO::Services::Multipathd
+        - OS::TripleO::Services::MySQLClient
+        - OS::TripleO::Services::NeutronBgpVpnBagpipe
+        - OS::TripleO::Services::NeutronLinuxbridgeAgent
+        - OS::TripleO::Services::NeutronVppAgent
+        - OS::TripleO::Services::NovaAZConfig
+        - OS::TripleO::Services::NovaCompute
+        - OS::TripleO::Services::NovaLibvirt
+        - OS::TripleO::Services::NovaLibvirtGuests
+        - OS::TripleO::Services::NovaMigrationTarget
+        - OS::TripleO::Services::ContainersLogrotateCrond
+        - OS::TripleO::Services::Podman
+        - OS::TripleO::Services::Rhsm
+        - OS::TripleO::Services::Rsyslog
+        - OS::TripleO::Services::RsyslogSidecar
+        - OS::TripleO::Services::Securetty
+        - OS::TripleO::Services::Snmp
+        - OS::TripleO::Services::Sshd
+        - OS::TripleO::Services::Timesync
+        - OS::TripleO::Services::Timezone
+        - OS::TripleO::Services::TripleoFirewall
+        - OS::TripleO::Services::TripleoPackages
+        - OS::TripleO::Services::Tuned
+        - OS::TripleO::Services::Vpp
+        - OS::TripleO::Services::OVNController
+        - OS::TripleO::Services::OVNMetadataAgent
+        ContainerImagePrepare:
+        - push_destination: false
+          set:
+            ceph_alertmanager_image: ose-prometheus-alertmanager
+            ceph_alertmanager_namespace: registry.redhat.io/openshift4
+            ceph_alertmanager_tag: v4.12
+            ceph_grafana_image: rhceph-6-dashboard-rhel9
+            ceph_grafana_namespace: registry.redhat.io/rhceph
+            ceph_grafana_tag: 6-77
+            ceph_image: rhceph-6-rhel9
+            ceph_namespace: registry.redhat.io/rhceph
+            ceph_node_exporter_image: ose-prometheus-node-exporter
+            ceph_node_exporter_namespace: registry.redhat.io/openshift4
+            ceph_node_exporter_tag: v4.12
+            ceph_prometheus_image: ose-prometheus
+            ceph_prometheus_namespace: registry.redhat.io/openshift4
+            ceph_prometheus_tag: v4.12
+            ceph_tag: 6-199
+            name_prefix: openstack-
+            name_suffix: ''
+            namespace: registry.redhat.io/rhosp-rhel9
+            neutron_driver: ovn
+            rhel_containers: false
+            tag: 17.1.6
+          tag_from_label: '{version}-{release}'
+        ContainerImageRegistryCredentials:
+          registry.redhat.io:
+            grosenbe-redhat.com: i.am.king.bison.6591
+        ControllerContainerImagePrepare: {}
+        ControllerCount: 3
+        ControllerServices:
+        - OS::TripleO::Services::Aide
+        - OS::TripleO::Services::AodhApi
+        - OS::TripleO::Services::AodhEvaluator
+        - OS::TripleO::Services::AodhListener
+        - OS::TripleO::Services::AodhNotifier
+        - OS::TripleO::Services::AuditD
+        - OS::TripleO::Services::BarbicanApi
+        - OS::TripleO::Services::BarbicanBackendSimpleCrypto
+        - OS::TripleO::Services::BarbicanBackendDogtag
+        - OS::TripleO::Services::BarbicanBackendKmip
+        - OS::TripleO::Services::BarbicanBackendPkcs11Crypto
+        - OS::TripleO::Services::BootParams
+        - OS::TripleO::Services::CACerts
+        - OS::TripleO::Services::CeilometerAgentCentral
+        - OS::TripleO::Services::CeilometerAgentNotification
+        - OS::TripleO::Services::CephClient
+        - OS::TripleO::Services::CephExternal
+        - OS::TripleO::Services::CephGrafana
+        - OS::TripleO::Services::CephMds
+        - OS::TripleO::Services::CephMgr
+        - OS::TripleO::Services::CephMon
+        - OS::TripleO::Services::CephNfs
+        - OS::TripleO::Services::CephRbdMirror
+        - OS::TripleO::Services::CephRgw
+        - OS::TripleO::Services::CinderApi
+        - OS::TripleO::Services::CinderBackendDellSc
+        - OS::TripleO::Services::CinderBackendDellEMCPowerFlex
+        - OS::TripleO::Services::CinderBackendDellEMCPowermax
+        - OS::TripleO::Services::CinderBackendDellEMCPowerStore
+        - OS::TripleO::Services::CinderBackendDellEMCSc
+        - OS::TripleO::Services::CinderBackendDellEMCUnity
+        - OS::TripleO::Services::CinderBackendDellEMCVMAXISCSI
+        - OS::TripleO::Services::CinderBackendDellEMCVNX
+        - OS::TripleO::Services::CinderBackendDellEMCVxFlexOS
+        - OS::TripleO::Services::CinderBackendDellEMCXtremio
+        - OS::TripleO::Services::CinderBackendNetApp
+        - OS::TripleO::Services::CinderBackendPure
+        - OS::TripleO::Services::CinderBackendScaleIO
+        - OS::TripleO::Services::CinderBackendNVMeOF
+        - OS::TripleO::Services::CinderBackup
+        - OS::TripleO::Services::CinderHPELeftHandISCSI
+        - OS::TripleO::Services::CinderScheduler
+        - OS::TripleO::Services::CinderVolume
+        - OS::TripleO::Services::Clustercheck
+        - OS::TripleO::Services::Collectd
+        - OS::TripleO::Services::ContainerImagePrepare
+        - OS::TripleO::Services::DesignateApi
+        - OS::TripleO::Services::DesignateCentral
+        - OS::TripleO::Services::DesignateProducer
+        - OS::TripleO::Services::DesignateWorker
+        - OS::TripleO::Services::DesignateMDNS
+        - OS::TripleO::Services::DesignateSink
+        - OS::TripleO::Services::DesignateBind
+        - OS::TripleO::Services::Etcd
+        - OS::TripleO::Services::ExternalSwiftProxy
+        - OS::TripleO::Services::Frr
+        - OS::TripleO::Services::GlanceApi
+        - OS::TripleO::Services::GlanceApiInternal
+        - OS::TripleO::Services::GnocchiApi
+        - OS::TripleO::Services::GnocchiMetricd
+        - OS::TripleO::Services::GnocchiStatsd
+        - OS::TripleO::Services::HAproxy
+        - OS::TripleO::Services::HeatApi
+        - OS::TripleO::Services::HeatApiCloudwatch
+        - OS::TripleO::Services::HeatApiCfn
+        - OS::TripleO::Services::HeatEngine
+        - OS::TripleO::Services::Horizon
+        - OS::TripleO::Services::IpaClient
+        - OS::TripleO::Services::Ipsec
+        - OS::TripleO::Services::IronicApi
+        - OS::TripleO::Services::IronicConductor
+        - OS::TripleO::Services::IronicInspector
+        - OS::TripleO::Services::IronicPxe
+        - OS::TripleO::Services::IronicNeutronAgent
+        - OS::TripleO::Services::Iscsid
+        - OS::TripleO::Services::Kernel
+        - OS::TripleO::Services::Keystone
+        - OS::TripleO::Services::LoginDefs
+        - OS::TripleO::Services::ManilaApi
+        - OS::TripleO::Services::ManilaBackendCephFs
+        - OS::TripleO::Services::ManilaBackendIsilon
+        - OS::TripleO::Services::ManilaBackendNetapp
+        - OS::TripleO::Services::ManilaBackendPowerMax
+        - OS::TripleO::Services::ManilaBackendUnity
+        - OS::TripleO::Services::ManilaBackendVNX
+        - OS::TripleO::Services::ManilaBackendVMAX
+        - OS::TripleO::Services::ManilaScheduler
+        - OS::TripleO::Services::ManilaShare
+        - OS::TripleO::Services::Memcached
+        - OS::TripleO::Services::MetricsQdr
+        - OS::TripleO::Services::Multipathd
+        - OS::TripleO::Services::MySQL
+        - OS::TripleO::Services::MySQLClient
+        - OS::TripleO::Services::NeutronApi
+        - OS::TripleO::Services::NeutronBgpVpnApi
+        - OS::TripleO::Services::NeutronSfcApi
+        - OS::TripleO::Services::NeutronCorePlugin
+        - OS::TripleO::Services::NeutronDhcpAgent
+        - OS::TripleO::Services::NeutronL2gwAgent
+        - OS::TripleO::Services::NeutronL2gwApi
+        - OS::TripleO::Services::NeutronL3Agent
+        - OS::TripleO::Services::NeutronLinuxbridgeAgent
+        - OS::TripleO::Services::NeutronMetadataAgent
+        - OS::TripleO::Services::NeutronOvsAgent
+        - OS::TripleO::Services::NeutronVppAgent
+        - OS::TripleO::Services::NeutronAgentsIBConfig
+        - OS::TripleO::Services::NovaApi
+        - OS::TripleO::Services::NovaConductor
+        - OS::TripleO::Services::NovaIronic
+        - OS::TripleO::Services::NovaMetadata
+        - OS::TripleO::Services::NovaScheduler
+        - OS::TripleO::Services::NovaVncProxy
+        - OS::TripleO::Services::ContainersLogrotateCrond
+        - OS::TripleO::Services::OctaviaApi
+        - OS::TripleO::Services::OctaviaDeploymentConfig
+        - OS::TripleO::Services::OctaviaHealthManager
+        - OS::TripleO::Services::OctaviaHousekeeping
+        - OS::TripleO::Services::OctaviaWorker
+        - OS::TripleO::Services::OpenStackClients
+        - OS::TripleO::Services::OVNDBs
+        - OS::TripleO::Services::OVNController
+        - OS::TripleO::Services::Pacemaker
+        - OS::TripleO::Services::PlacementApi
+        - OS::TripleO::Services::OsloMessagingRpc
+        - OS::TripleO::Services::OsloMessagingNotify
+        - OS::TripleO::Services::Podman
+        - OS::TripleO::Services::Redis
+        - OS::TripleO::Services::Rhsm
+        - OS::TripleO::Services::Rsyslog
+        - OS::TripleO::Services::RsyslogSidecar
+        - OS::TripleO::Services::Securetty
+        - OS::TripleO::Services::Snmp
+        - OS::TripleO::Services::Sshd
+        - OS::TripleO::Services::SwiftProxy
+        - OS::TripleO::Services::SwiftDispersion
+        - OS::TripleO::Services::SwiftRingBuilder
+        - OS::TripleO::Services::SwiftStorage
+        - OS::TripleO::Services::Timesync
+        - OS::TripleO::Services::Timezone
+        - OS::TripleO::Services::TripleoFirewall
+        - OS::TripleO::Services::TripleoPackages
+        - OS::TripleO::Services::Tuned
+        - OS::TripleO::Services::Unbound
+        - OS::TripleO::Services::Vpp
+        DockerInsecureRegistryAddress: []
+        DockerRegistryMirror: ''
+        NeutronMechanismDrivers:
+        - ovn
+    tripleo_container_image_prepare_debug: false
+    tripleo_container_image_prepare_log_file: /var/log/tripleo-container-image-prepare.log
+    tripleo_container_image_prepare_roles:
+    - CountDefault: 1
+      HostnameFormatDefault: '%stackname%-controller-%index%'
+      RoleParametersDefault:
+        OVNCMSOptions: enable-chassis-as-gw
+      ServicesDefault:
+      - OS::TripleO::Services::Aide
+      - OS::TripleO::Services::AodhApi
+      - OS::TripleO::Services::AodhEvaluator
+      - OS::TripleO::Services::AodhListener
+      - OS::TripleO::Services::AodhNotifier
+      - OS::TripleO::Services::AuditD
+      - OS::TripleO::Services::BarbicanApi
+      - OS::TripleO::Services::BarbicanBackendSimpleCrypto
+      - OS::TripleO::Services::BarbicanBackendDogtag
+      - OS::TripleO::Services::BarbicanBackendKmip
+      - OS::TripleO::Services::BarbicanBackendPkcs11Crypto
+      - OS::TripleO::Services::BootParams
+      - OS::TripleO::Services::CACerts
+      - OS::TripleO::Services::CeilometerAgentCentral
+      - OS::TripleO::Services::CeilometerAgentNotification
+      - OS::TripleO::Services::CephClient
+      - OS::TripleO::Services::CephExternal
+      - OS::TripleO::Services::CephGrafana
+      - OS::TripleO::Services::CephMds
+      - OS::TripleO::Services::CephMgr
+      - OS::TripleO::Services::CephMon
+      - OS::TripleO::Services::CephNfs
+      - OS::TripleO::Services::CephRbdMirror
+      - OS::TripleO::Services::CephRgw
+      - OS::TripleO::Services::CinderApi
+      - OS::TripleO::Services::CinderBackendDellSc
+      - OS::TripleO::Services::CinderBackendDellEMCPowerFlex
+      - OS::TripleO::Services::CinderBackendDellEMCPowermax
+      - OS::TripleO::Services::CinderBackendDellEMCPowerStore
+      - OS::TripleO::Services::CinderBackendDellEMCSc
+      - OS::TripleO::Services::CinderBackendDellEMCUnity
+      - OS::TripleO::Services::CinderBackendDellEMCVMAXISCSI
+      - OS::TripleO::Services::CinderBackendDellEMCVNX
+      - OS::TripleO::Services::CinderBackendDellEMCVxFlexOS
+      - OS::TripleO::Services::CinderBackendDellEMCXtremio
+      - OS::TripleO::Services::CinderBackendNetApp
+      - OS::TripleO::Services::CinderBackendPure
+      - OS::TripleO::Services::CinderBackendScaleIO
+      - OS::TripleO::Services::CinderBackendNVMeOF
+      - OS::TripleO::Services::CinderBackup
+      - OS::TripleO::Services::CinderHPELeftHandISCSI
+      - OS::TripleO::Services::CinderScheduler
+      - OS::TripleO::Services::CinderVolume
+      - OS::TripleO::Services::Clustercheck
+      - OS::TripleO::Services::Collectd
+      - OS::TripleO::Services::ContainerImagePrepare
+      - OS::TripleO::Services::DesignateApi
+      - OS::TripleO::Services::DesignateCentral
+      - OS::TripleO::Services::DesignateProducer
+      - OS::TripleO::Services::DesignateWorker
+      - OS::TripleO::Services::DesignateMDNS
+      - OS::TripleO::Services::DesignateSink
+      - OS::TripleO::Services::DesignateBind
+      - OS::TripleO::Services::Etcd
+      - OS::TripleO::Services::ExternalSwiftProxy
+      - OS::TripleO::Services::Frr
+      - OS::TripleO::Services::GlanceApi
+      - OS::TripleO::Services::GlanceApiInternal
+      - OS::TripleO::Services::GnocchiApi
+      - OS::TripleO::Services::GnocchiMetricd
+      - OS::TripleO::Services::GnocchiStatsd
+      - OS::TripleO::Services::HAproxy
+      - OS::TripleO::Services::HeatApi
+      - OS::TripleO::Services::HeatApiCloudwatch
+      - OS::TripleO::Services::HeatApiCfn
+      - OS::TripleO::Services::HeatEngine
+      - OS::TripleO::Services::Horizon
+      - OS::TripleO::Services::IpaClient
+      - OS::TripleO::Services::Ipsec
+      - OS::TripleO::Services::IronicApi
+      - OS::TripleO::Services::IronicConductor
+      - OS::TripleO::Services::IronicInspector
+      - OS::TripleO::Services::IronicPxe
+      - OS::TripleO::Services::IronicNeutronAgent
+      - OS::TripleO::Services::Iscsid
+      - OS::TripleO::Services::Kernel
+      - OS::TripleO::Services::Keystone
+      - OS::TripleO::Services::LoginDefs
+      - OS::TripleO::Services::ManilaApi
+      - OS::TripleO::Services::ManilaBackendCephFs
+      - OS::TripleO::Services::ManilaBackendIsilon
+      - OS::TripleO::Services::ManilaBackendNetapp
+      - OS::TripleO::Services::ManilaBackendPowerMax
+      - OS::TripleO::Services::ManilaBackendUnity
+      - OS::TripleO::Services::ManilaBackendVNX
+      - OS::TripleO::Services::ManilaBackendVMAX
+      - OS::TripleO::Services::ManilaScheduler
+      - OS::TripleO::Services::ManilaShare
+      - OS::TripleO::Services::Memcached
+      - OS::TripleO::Services::MetricsQdr
+      - OS::TripleO::Services::Multipathd
+      - OS::TripleO::Services::MySQL
+      - OS::TripleO::Services::MySQLClient
+      - OS::TripleO::Services::NeutronApi
+      - OS::TripleO::Services::NeutronBgpVpnApi
+      - OS::TripleO::Services::NeutronSfcApi
+      - OS::TripleO::Services::NeutronCorePlugin
+      - OS::TripleO::Services::NeutronDhcpAgent
+      - OS::TripleO::Services::NeutronL2gwAgent
+      - OS::TripleO::Services::NeutronL2gwApi
+      - OS::TripleO::Services::NeutronL3Agent
+      - OS::TripleO::Services::NeutronLinuxbridgeAgent
+      - OS::TripleO::Services::NeutronMetadataAgent
+      - OS::TripleO::Services::NeutronOvsAgent
+      - OS::TripleO::Services::NeutronVppAgent
+      - OS::TripleO::Services::NeutronAgentsIBConfig
+      - OS::TripleO::Services::NovaApi
+      - OS::TripleO::Services::NovaConductor
+      - OS::TripleO::Services::NovaIronic
+      - OS::TripleO::Services::NovaMetadata
+      - OS::TripleO::Services::NovaScheduler
+      - OS::TripleO::Services::NovaVncProxy
+      - OS::TripleO::Services::ContainersLogrotateCrond
+      - OS::TripleO::Services::OctaviaApi
+      - OS::TripleO::Services::OctaviaDeploymentConfig
+      - OS::TripleO::Services::OctaviaHealthManager
+      - OS::TripleO::Services::OctaviaHousekeeping
+      - OS::TripleO::Services::OctaviaWorker
+      - OS::TripleO::Services::OpenStackClients
+      - OS::TripleO::Services::OVNDBs
+      - OS::TripleO::Services::OVNController
+      - OS::TripleO::Services::Pacemaker
+      - OS::TripleO::Services::PlacementApi
+      - OS::TripleO::Services::OsloMessagingRpc
+      - OS::TripleO::Services::OsloMessagingNotify
+      - OS::TripleO::Services::Podman
+      - OS::TripleO::Services::Redis
+      - OS::TripleO::Services::Rhsm
+      - OS::TripleO::Services::Rsyslog
+      - OS::TripleO::Services::RsyslogSidecar
+      - OS::TripleO::Services::Securetty
+      - OS::TripleO::Services::Snmp
+      - OS::TripleO::Services::Sshd
+      - OS::TripleO::Services::SwiftProxy
+      - OS::TripleO::Services::SwiftDispersion
+      - OS::TripleO::Services::SwiftRingBuilder
+      - OS::TripleO::Services::SwiftStorage
+      - OS::TripleO::Services::Timesync
+      - OS::TripleO::Services::Timezone
+      - OS::TripleO::Services::TripleoFirewall
+      - OS::TripleO::Services::TripleoPackages
+      - OS::TripleO::Services::Tuned
+      - OS::TripleO::Services::Unbound
+      - OS::TripleO::Services::Vpp
+      default_route_networks:
+      - External
+      deprecated_nic_config_name: controller.yaml
+      deprecated_param_extraconfig: controllerExtraConfig
+      deprecated_param_flavor: OvercloudControlFlavor
+      deprecated_param_image: controllerImage
+      description: Controller role that has all the controler services loaded and
+        handles\nDatabase, Messaging and Network functions.\n
+      name: Controller
+      networks:
+        External:
+          subnet: external_subnet
+        InternalApi:
+          subnet: internal_api_subnet
+        Storage:
+          subnet: storage_subnet
+        StorageMgmt:
+          subnet: storage_mgmt_subnet
+        Tenant:
+          subnet: tenant_subnet
+      tags:
+      - primary
+      - controller
+      - external_bridge
+      update_serial: 1
+      uses_deprecated_params: true
+    - RoleParametersDefault:
+        FsAioMaxNumber: 1048576
+        NovaComputeStartupDelay: 180
+        TunedProfileName: throughput-performance
+      ServicesDefault:
+      - OS::TripleO::Services::Aide
+      - OS::TripleO::Services::AuditD
+      - OS::TripleO::Services::BootParams
+      - OS::TripleO::Services::CACerts
+      - OS::TripleO::Services::CephClient
+      - OS::TripleO::Services::CephExternal
+      - OS::TripleO::Services::CephOSD
+      - OS::TripleO::Services::Collectd
+      - OS::TripleO::Services::ComputeCeilometerAgent
+      - OS::TripleO::Services::CeilometerAgentIpmi
+      - OS::TripleO::Services::ComputeNeutronCorePlugin
+      - OS::TripleO::Services::ComputeNeutronL3Agent
+      - OS::TripleO::Services::ComputeNeutronMetadataAgent
+      - OS::TripleO::Services::ComputeNeutronOvsAgent
+      - OS::TripleO::Services::Frr
+      - OS::TripleO::Services::IpaClient
+      - OS::TripleO::Services::Ipsec
+      - OS::TripleO::Services::Iscsid
+      - OS::TripleO::Services::Kernel
+      - OS::TripleO::Services::LoginDefs
+      - OS::TripleO::Services::MetricsQdr
+      - OS::TripleO::Services::Multipathd
+      - OS::TripleO::Services::MySQLClient
+      - OS::TripleO::Services::NeutronBgpVpnBagpipe
+      - OS::TripleO::Services::NeutronLinuxbridgeAgent
+      - OS::TripleO::Services::NeutronVppAgent
+      - OS::TripleO::Services::NovaAZConfig
+      - OS::TripleO::Services::NovaCompute
+      - OS::TripleO::Services::NovaLibvirt
+      - OS::TripleO::Services::NovaLibvirtGuests
+      - OS::TripleO::Services::NovaMigrationTarget
+      - OS::TripleO::Services::ContainersLogrotateCrond
+      - OS::TripleO::Services::Podman
+      - OS::TripleO::Services::Rhsm
+      - OS::TripleO::Services::Rsyslog
+      - OS::TripleO::Services::RsyslogSidecar
+      - OS::TripleO::Services::Securetty
+      - OS::TripleO::Services::Snmp
+      - OS::TripleO::Services::Sshd
+      - OS::TripleO::Services::Timesync
+      - OS::TripleO::Services::Timezone
+      - OS::TripleO::Services::TripleoFirewall
+      - OS::TripleO::Services::TripleoPackages
+      - OS::TripleO::Services::Tuned
+      - OS::TripleO::Services::Vpp
+      - OS::TripleO::Services::OVNController
+      - OS::TripleO::Services::OVNMetadataAgent
+      description: Compute Node role hosting Ceph OSD too\n
+      name: ComputeHCI
+      networks:
+        InternalApi:
+          subnet: internal_api_subnet
+        Storage:
+          subnet: storage_subnet
+        StorageMgmt:
+          subnet: storage_mgmt_subnet
+        Tenant:
+          subnet: tenant_subnet
+      tags:
+      - compute
+      update_serial: 1
+  when:
+  - (step | int) == 1
+- block:
+  - become: true
+    file:
+      mode: '0755'
+      owner: root
+      path: /etc/openstack
+      state: directory
+    name: Create /etc/openstack directory if it does not exist
+  - include_role:
+      name: tripleo_keystone_resources
+      tasks_from: clouds
+    name: Configure /etc/openstack/clouds.yaml
+    vars:
+      tripleo_keystone_resources_cloud_config:
+        auth:
+          auth_url: http://192.168.131.60:5000
+          password: h5fxn4fxfqsszsmn9hlsb4ztd
+          project_domain_name: Default
+          project_name: admin
+          user_domain_name: Default
+          username: admin
+        cacert: ''
+        identity_api_version: '3'
+        region_name: regionOne
+        volume_api_version: '3'
+      tripleo_keystone_resources_cloud_name: overcloud
+  name: Manage clouds.yaml files
+  when:
+  - step|int == 1
+  - not ansible_check_mode|bool
+- become: true
+  block:
+  - include_role:
+      name: tripleo_keystone_resources
+    name: Manage Keystone resources for OpenStack services
+    vars:
+      tripleo_keystone_resources_admin_endpoint: http://172.16.1.10:35357
+      tripleo_keystone_resources_admin_password: h5fxn4fxfqsszsmn9hlsb4ztd
+      tripleo_keystone_resources_catalog_config: '{{ keystone_resources }}'
+      tripleo_keystone_resources_cloud_name: overcloud
+      tripleo_keystone_resources_internal_endpoint: http://172.16.2.10:5000
+      tripleo_keystone_resources_member_role_enabled: false
+      tripleo_keystone_resources_public_endpoint: http://192.168.131.60:5000
+      tripleo_keystone_resources_region: regionOne
+      tripleo_keystone_resources_service_project: service
+  - name: is Keystone LDAP enabled
+    set_fact:
+      keystone_ldap_domain_enabled: false
+  - name: Set fact for tripleo_keystone_ldap_domains
+    set_fact:
+      tripleo_keystone_ldap_domains: {}
+    when: keystone_ldap_domain_enabled|bool
+  - include_role:
+      name: tripleo_keystone_resources
+      tasks_from: domains
+    name: Manage Keystone domains from LDAP config
+    vars:
+      batched_tripleo_keystone_resources_domains: '{{ tripleo_keystone_ldap_domains
+        | list }}'
+      tripleo_keystone_resources_catalog_config: '{{ keystone_resources }}'
+      tripleo_keystone_resources_cloud_name: overcloud
+    when: keystone_ldap_domain_enabled|bool
+  name: Manage Keystone resources
+  when:
+  - step|int == 4
+  - not ansible_check_mode|bool
+- block:
+  - name: create ovn mac address for Controller role nodes
+    tripleo_ovn_mac_addresses:
+      ovn_bridge_mappings:
+      - datacentre:br-ex
+      ovn_static_bridge_mac_mappings:
+        computehci-0:
+          datacentre: fa:16:3a:bf:c7:03
+        computehci-1:
+          datacentre: fa:16:3a:65:de:4f
+        controller-0:
+          datacentre: fa:16:3a:c7:b6:e1
+        controller-1:
+          datacentre: fa:16:3a:06:75:04
+        controller-2:
+          datacentre: fa:16:3a:e1:78:28
+      playbook_dir: '{{ playbook_dir }}'
+      role_name: Controller
+      server_resource_names: '{{ groups["Controller"] }}'
+      stack_name: overcloud
+  name: ovn_controller_external_deploy_init
+  when:
+  - step|int == 0
+- block:
+  - name: Build disk list for cephadm
+    set_fact:
+      cephadm_disk_list:
+        devices: []
+        osd_objectstore: bluestore
+        osd_scenario: lvm
+  name: ceph_osd_external_deploy_init
+  when: step|int == 1
+- block:
+  - name: create ovn mac address for ComputeHCI role nodes
+    tripleo_ovn_mac_addresses:
+      ovn_bridge_mappings:
+      - datacentre:br-ex
+      ovn_static_bridge_mac_mappings:
+        computehci-0:
+          datacentre: fa:16:3a:bf:c7:03
+        computehci-1:
+          datacentre: fa:16:3a:65:de:4f
+        controller-0:
+          datacentre: fa:16:3a:c7:b6:e1
+        controller-1:
+          datacentre: fa:16:3a:06:75:04
+        controller-2:
+          datacentre: fa:16:3a:e1:78:28
+      playbook_dir: '{{ playbook_dir }}'
+      role_name: ComputeHCI
+      server_resource_names: '{{ groups["ComputeHCI"] }}'
+      stack_name: overcloud
+  name: ovn_controller_external_deploy_init
+  when:
+  - step|int == 0

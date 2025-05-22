@@ -1,0 +1,15 @@
+pre_network_ComputeHCI:  [] 
+
+pre_deployments_ComputeHCI:  [] 
+
+post_deployments_ComputeHCI:  [] 
+
+# ansible_host_vars managed by TripleO Heat Templates in puppet/role.role.j2.yaml:
+fqdn_canonical: computehci-0.turbo.lab.test
+fqdn_ctlplane: computehci-0.ctlplane.turbo.lab.test
+fqdn_internal_api: computehci-0.internalapi.turbo.lab.test
+fqdn_storage: computehci-0.storage.turbo.lab.test
+fqdn_storage_mgmt: computehci-0.storagemgmt.turbo.lab.test
+fqdn_tenant: computehci-0.tenant.turbo.lab.test
+hostname_resolve_network: internal_api
+

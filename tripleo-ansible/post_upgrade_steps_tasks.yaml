@@ -1,0 +1,7 @@
+
+- include_tasks: "{{ _task_file_path }}"
+  vars:
+    _task_file_path: "{{ tripleo_role_name }}/post_upgrade_tasks.yaml"
+  when: "'{{ playbook_dir }}/{{ _task_file_path }}' is exists"
+  tags:
+    - always

@@ -1,0 +1,23 @@
+- hosts: Controller:overcloud
+  strategy: tripleo_free
+  name: Server pre network steps
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  vars:
+    deploy_source_host: "Undercloud"
+  tasks:
+
+    - name: Server pre-network deployments
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'Server pre-network deployments' to resume from this task
+    - import_tasks: hiera_steps_tasks.yaml
+    - include_tasks: deployments.yaml
+      vars:
+        force: false
+      with_items: "{{ hostvars[inventory_hostname]['pre_network_' ~ tripleo_role_name]|default([]) }}"
+
+  tags:
+    - overcloud
+    - pre_deploy_steps

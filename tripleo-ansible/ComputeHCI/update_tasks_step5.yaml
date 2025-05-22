@@ -1,0 +1,19 @@
+- block:
+  - become: true
+    containers.podman.podman_image:
+      force: true
+      name: '{{ prefetch_image }}'
+      validate_certs: false
+    delay: 5
+    loop: '{{ lookup(''template'', tripleo_role_name + ''/docker_config.yaml'', errors=''ignore'')
+      | default(''{}'', True) | from_yaml | recursive_get_key_from_dict(key=''image'')
+      | unique }}'
+    loop_control:
+      loop_var: prefetch_image
+    name: Pre-fetch all the containers
+    register: result
+    retries: 5
+    until: result is succeeded
+  name: Force pre-fetch of container images
+  when:
+  - (step|int) == 5

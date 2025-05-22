@@ -1,0 +1,878 @@
+- include_role:
+    name: tripleo_firewall
+  name: Run firewall role
+- file:
+    mode: '{{ item.mode|default(omit) }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/cinder
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/containers/httpd/cinder-api
+    setype: container_file_t
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/cinder
+    setype: container_file_t
+- name: enable virt_sandbox_use_netlink for healthcheck
+  seboolean:
+    name: virt_sandbox_use_netlink
+    persistent: true
+    state: true
+  when:
+  - ansible_facts.selinux is defined
+  - ansible_facts.selinux.status == "enabled"
+- community.general.sefcontext:
+    setype: container_file_t
+    state: present
+    target: /var/lib/cinder(/.*)?
+  name: create fcontext entry for cinder data
+- file:
+    mode: '{{ item.mode|default(omit) }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/cinder
+    setype: container_file_t
+  - path: /var/lib/cinder
+    setype: container_file_t
+- file:
+    path: /var/lib/tripleo-config/ceph
+    state: directory
+  name: ensure ceph configurations exist
+- block:
+  - file:
+      path: /var/lib/cinder_image_conversion
+      state: directory
+    name: Create cinder image conversion directory
+  - mount:
+      fstype: nfs4
+      opts: '{{ image_conversion_nfs_options }}'
+      path: /var/lib/cinder_image_conversion
+      src: '{{ image_conversion_nfs_share }}'
+      state: mounted
+    name: Mount cinder's image conversion NFS share
+    vars:
+      image_conversion_nfs_options: _netdev,bg,intr,context=system_u:object_r:container_file_t:s0
+      image_conversion_nfs_share: ''
+  name: Support using an NFS share for cinder image conversion
+  vars:
+    image_conversion_nfs_enabled: false
+  when:
+  - image_conversion_nfs_enabled|bool
+- name: cinder_configure_lvm fact
+  set_fact:
+    cinder_configure_lvm: false
+- block:
+  - name: ensure LVM rpm dependencies are installed
+    package:
+      name: lvm2
+      state: latest
+  - args:
+      creates: /var/lib/cinder/cinder-volumes
+    command: dd if=/dev/zero of=/var/lib/cinder/cinder-volumes bs=1 count=0 seek=10280M
+    name: cinder create LVM volume group dd
+  - args:
+      executable: /bin/bash
+    changed_when: _loopback_device.rc == 2
+    failed_when: _loopback_device.rc not in [0,2]
+    name: Get or create LVM loopback device
+    register: _loopback_device
+    shell: "exit_code=0\nexisting_device=$(losetup -j /var/lib/cinder/cinder-volumes\
+      \ -l -n -O NAME)\nif [[ -z \"${existing_device}\" ]]; then\n    losetup -f /var/lib/cinder/cinder-volumes\
+      \ --show\n    exit_code=2\nelse\n    echo ${existing_device%$'\\n'*}\nfi\nexit\
+      \ ${exit_code}"
+  - community.general.lvg:
+      pvs: '{{ _loopback_device.stdout }}'
+      state: present
+      vg: cinder-volumes
+    name: Create LVM volume group
+    when:
+    - not (ansible_check_mode | bool)
+  - copy:
+      content: '[Unit]
+
+        Description=Cinder LVM losetup
+
+        DefaultDependencies=no
+
+        Conflicts=umount.target
+
+        Requires=lvm2-monitor.service systemd-udev-settle.service
+
+        Before=local-fs.target umount.target
+
+        After=var.mount lvm2-monitor.service systemd-udev-settle.service
+
+
+        [Service]
+
+        Type=oneshot
+
+        ExecStart=/sbin/losetup {{ _loopback_device.stdout }} /var/lib/cinder/cinder-volumes
+
+        ExecStop=/sbin/losetup -d {{ _loopback_device.stdout }}
+
+        RemainAfterExit=yes
+
+
+        [Install]
+
+        WantedBy=local-fs-pre.target
+
+        '
+      dest: /etc/systemd/system/cinder-lvm-losetup.service
+    name: cinder create service to run losetup for LVM on startup
+    when:
+    - not (ansible_check_mode | bool)
+  - name: cinder enable the LVM losetup service
+    systemd:
+      daemon_reload: true
+      enabled: true
+      name: cinder-lvm-losetup
+  when: cinder_configure_lvm|bool
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/glance
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/containers/httpd/glance
+    setype: container_file_t
+- mount:
+    fstype: nfs
+    name: /var/lib/glance/images
+    opts: '{{nfs_options}}'
+    src: '{{nfs_share}}'
+    state: mounted
+  name: Mount NFS on host
+  vars:
+    glance_netapp_nfs_enabled: false
+    glance_nfs_share: ''
+    netapp_share_location: ''
+    nfs_backend_enabled: false
+    nfs_options: _netdev,bg,intr,context=system_u:object_r:container_file_t:s0
+    nfs_share: '{{ glance_nfs_share if (glance_nfs_share) else netapp_share_location
+      }}'
+  when: nfs_backend_enabled or glance_netapp_nfs_enabled
+- mount:
+    fstype: nfs
+    name: '{{glance_node_staging_uri[7:]}}'
+    opts: '{{glance_nfs_options}}'
+    src: '{{glance_staging_nfs_share}}'
+    state: mounted
+  name: Mount Node Staging Location
+  vars:
+    glance_nfs_options: _netdev,bg,intr,context=system_u:object_r:container_file_t:s0
+    glance_node_staging_uri: file:///var/lib/glance/staging
+    glance_staging_nfs_share: ''
+  when: glance_staging_nfs_share != ''
+- file:
+    path: /var/lib/glance
+    setype: container_file_t
+    state: directory
+  name: ensure /var/lib/glance exists
+- name: get parameters
+  no_log: '{{ hide_sensitive_logs | bool }}'
+  set_fact:
+    cert_content: ''
+    cert_path: /etc/pki/tls/private/overcloud_endpoint.pem
+    chain_content: ''
+    key_content: ''
+- block:
+  - name: get DeployedSSLCertificatePath attributes
+    register: attr_cert_path
+    stat:
+      path: '{{cert_path}}'
+  - name: set is_haproxy_bootstrap_node fact
+    set_fact: is_haproxy_bootstrap_node={{haproxy_short_bootstrap_node_name | lower
+      == ansible_facts['hostname'] | lower}}
+    when:
+    - haproxy_short_bootstrap_node_name|default(false)
+  - name: get haproxy status
+    register: haproxy_state
+    systemd:
+      name: haproxy
+  - name: get pacemaker status
+    register: pacemaker_state
+    systemd:
+      name: pacemaker
+  - name: get docker status
+    register: docker_state
+    systemd:
+      name: docker
+  - command: '{{ container_cli }} ps -q -f name=''^haproxy(-bundle)?'''
+    name: get container_id
+    register: container_id
+    when:
+    - docker_state.status.ActiveState == 'active' or container_cli == 'podman'
+    - attr_cert_path.stat.exists
+    - attr_cert_path.stat.isdir == False
+  - name: get pcs resource name for haproxy container
+    register: pacemaker_resource
+    shell: 'pcs status resources | sed -n ''s/^.*container.*: \(haproxy.*\) .*/\1/p''
+
+      '
+    when:
+    - bootstrap_node is defined
+    - is_haproxy_bootstrap_node
+    - pacemaker_state.status.ActiveState == 'active'
+    - attr_cert_path.stat.exists
+    - attr_cert_path.stat.isdir
+  - file:
+      path: '{{cert_path}}'
+      state: absent
+    name: remove DeployedSSLCertificatePath if is dir
+    when: attr_cert_path.stat.isdir is defined and attr_cert_path.stat.isdir
+  - copy:
+      content: '{{cert_content}}
+
+        {{chain_content}}
+
+        {{key_content}}
+
+        '
+      dest: '{{cert_path}}'
+      mode: 288
+      owner: root
+    name: push certificate content
+    no_log: '{{ hide_sensitive_logs | bool }}'
+  - block:
+    - file:
+        group: haproxy
+        path: '{{cert_path}}'
+      name: set certificate ownership
+    - name: reload haproxy if enabled
+      service:
+        name: haproxy
+        state: reloaded
+    name: BM haproxy non-pacemaker context
+    when: haproxy_state.status.ActiveState == 'active'
+  - command: pcs resource restart "{{pacemaker_resource.stdout}}"
+    name: restart pacemaker resource for haproxy
+    when:
+    - pacemaker_resource is defined
+    - pacemaker_resource.stdout is defined
+    - pacemaker_resource.stdout != ''
+  - block:
+    - failed_when:
+      - container_kill_result.rc != 0
+      - ("no such container" not in container_kill_result.stderr)
+      - ("container state improper" not in container_kill_result.stderr)
+      name: copy certificate, chgrp, restart haproxy
+      register: container_kill_result
+      shell: "set -e\nif {{ container_cli }} ps -f \"id={{ item }}\" --format \"{{\
+        \ '{{' }}.Names{{ '}}' }}\" | grep -q \"^haproxy-bundle\"; then\n  tar -c\
+        \ {{ cert_path }} | {{container_cli}} exec -i {{ item }} tar -C / -xv\nelse\n\
+        \  {{ container_cli }} cp {{ cert_path }} {{ item }}:{{ cert_path }}\nfi\n\
+        {{ container_cli }} exec --user root {{ item }} chgrp haproxy {{ cert_path\
+        \ }}\n{{ container_cli }} kill --signal=HUP {{ item }}\n"
+      with_items: '{{ container_id.stdout.split(''
+
+        '') }}'
+    name: dedicated part for containers
+    when:
+    - container_id is defined
+    - container_id.stdout is defined
+    - container_id.stdout != ''
+  name: manage certificate
+  when:
+  - cert_content is defined
+  - cert_content != ''
+- file:
+    mode: '{{ item.mode|default(omit) }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/haproxy
+    setype: var_log_t
+  - path: /var/lib/haproxy
+    setype: container_file_t
+- changed_when: puppet_host_outputs.rc == 2
+  failed_when: false
+  name: Run puppet on the host to apply IPtables rules
+  no_log: true
+  register: puppet_host_outputs
+  shell: "puppet apply {{ (puppet_debug|bool) | ternary('--debug --verbose', '') }}\
+    \ --detailed-exitcodes --summarize --color=false \\\n    --modulepath '{{ puppet_modulepath\
+    \ }}' --tags '{{ puppet_tags }}' -e '{{ puppet_execute }}'\n"
+  vars:
+    puppet_debug: false
+    puppet_execute: 'if hiera(''enable_load_balancer'', true) { class {''::tripleo::haproxy'':
+      use_internal_certificates => false, manage_firewall => hiera(''tripleo::firewall::manage_firewall'',
+      true), }}'
+    puppet_modulepath: /etc/puppet/modules:/opt/stack/puppet-modules:/usr/share/openstack-puppet/modules
+    puppet_tags: tripleo::firewall::rule
+- debug:
+    var: puppet_host_outputs.stdout_lines | default([]) | union(puppet_host_outputs.stderr_lines
+      | default([]))
+  failed_when: puppet_host_outputs.rc not in [0, 2]
+  name: 'Debug output for task: Run puppet on the host to apply IPtables rules'
+  when:
+  - not (ansible_check_mode | bool)
+  - puppet_host_outputs.rc is defined
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/heat
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/containers/httpd/heat-api
+    setype: container_file_t
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/heat
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/containers/httpd/heat-api-cfn
+    setype: container_file_t
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/heat
+    setype: container_file_t
+- file:
+    mode: '{{ item.mode|default(omit) }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/horizon
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/containers/httpd/horizon
+    setype: container_file_t
+  - path: /var/www
+    setype: container_file_t
+  - mode: '01777'
+    path: /var/tmp/horizon
+    setype: container_file_t
+- copy:
+    content: 'd /var/tmp/horizon 01777 root root - -
+
+      '
+    dest: /etc/tmpfiles.d/var-tmp-horizon.conf
+  name: ensure /var/tmp/horizon exists on boot
+- community.general.sefcontext:
+    setype: '{{ item.setype }}'
+    state: present
+    target: '{{ item.path }}(/.*)?'
+  name: create fcontext entry for iscsi
+  with_items:
+  - path: /etc/iscsi
+    setype: container_file_t
+  - path: /etc/target
+    setype: container_file_t
+  - path: /var/lib/iscsi
+    setype: container_file_t
+- file:
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - path: /etc/iscsi
+    setype: container_file_t
+  - path: /etc/target
+    setype: container_file_t
+  - path: /var/lib/iscsi
+    setype: container_file_t
+- name: stat /lib/systemd/system/iscsid.socket
+  register: stat_iscsid_socket
+  stat: path=/lib/systemd/system/iscsid.socket
+- name: Stop and disable iscsid.socket service
+  service: name=iscsid.socket state=stopped enabled=no
+  when: stat_iscsid_socket.stat.exists
+- command: systemctl is-enabled --quiet iscsi.service
+  failed_when: false
+  name: Check if iscsi.service is enabled
+  register: iscsi_service_enabled_result
+- name: Stop iscsi.service
+  service: name=iscsi.service state=stopped enabled=no
+  when:
+  - iscsi_service_enabled_result is changed
+  - iscsi_service_enabled_result.rc == 0
+- include_role:
+    name: tripleo_kernel
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/keystone
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/containers/httpd/keystone
+    setype: container_file_t
+- name: Check if file certs_valid exist
+  register: certs_valid_stat
+  stat:
+    path: /etc/openldap/certs/certs_valid
+- name: Check if file cert9.db exist
+  register: cert9_stat
+  stat:
+    path: /etc/openldap/certs/cert9.db
+  when: not certs_valid_stat.stat.exists
+- name: Check if file key4.db exist
+  register: key4_stat
+  stat:
+    path: /etc/openldap/certs/key4.db
+  when: not certs_valid_stat.stat.exists
+- fail:
+    msg: 'Keys and/or certificates were found in /etc/openldap/certs but these conflicts
+      with keystone python LDAP calls.  If you know those certificates are valid and
+      not causing any conflicts, you can touch /etc/openldap/certs/certs_valid in
+      order to skip this failure and retry or you can delete the files located in
+      /etc/openldap/certs and retry.
+
+      '
+  when: ( cert9_stat.stat.exists or key4_stat.stat.exists ) and not certs_valid_stat.stat.exists
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/memcached
+    setype: container_file_t
+- file:
+    mode: '{{ item.mode|default(omit) }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/mysql
+    setype: container_file_t
+  - path: /var/lib/mysql
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/mariadb
+    setype: container_file_t
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/neutron
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/containers/httpd/neutron-api
+    setype: container_file_t
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/nova
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/containers/httpd/nova-api
+    setype: container_file_t
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/nova
+    setype: container_file_t
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/nova
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/containers/httpd/nova-metadata
+    setype: container_file_t
+- group:
+    gid: 107
+    name: qemu
+    state: present
+  name: ensure qemu group is present on the host
+- name: ensure qemu user is present on the host
+  user:
+    comment: qemu user
+    group: qemu
+    name: qemu
+    shell: /sbin/nologin
+    state: present
+    uid: 107
+- name: allow logrotate to read inside containers
+  seboolean:
+    name: logrotate_read_inside_containers
+    persistent: true
+    state: true
+  when:
+  - ansible_facts.selinux is defined
+  - ansible_facts.selinux.status == "enabled"
+- file:
+    mode: '{{ item.mode|default(omit) }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  loop:
+  - mode: '0750'
+    path: /var/log/containers/openvswitch
+    setype: container_file_t
+  - path: /var/lib/openvswitch/ovn
+    setype: container_file_t
+  name: create persistent directories
+- file:
+    mode: '{{ item.mode|default(omit) }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/openvswitch
+    setype: container_file_t
+  - path: /var/lib/openvswitch/ovn
+    setype: container_file_t
+- copy:
+    content: "#!/usr/bin/bash\n# Cleanup neutron OVS bridges. To be called on startup\
+      \ to avoid\n# \"difficult-to-debug\" issues with partially configured resources.\n\
+      \nNEUTRON_OVS_CONF=/var/lib/config-data/puppet-generated/neutron/etc/neutron/plugins/ml2/openvswitch_agent.ini\n\
+      \nif [ -e ${NEUTRON_OVS_CONF} ];\nthen\n    INT_BRIDGE=`crudini --get ${NEUTRON_OVS_CONF}\
+      \ ovs integration_bridge`\n    TUN_BRIDGE=`crudini --get ${NEUTRON_OVS_CONF}\
+      \ ovs tunnel_bridge`\nfi\n\nfor port in `ovs-vsctl list-ports ${INT_BRIDGE:-\"\
+      br-int\"}`;\ndo\n    skip_cleanup=`ovs-vsctl --if-exists get Interface $port\
+      \ external_ids:skip_cleanup`\n    if ! [[ \"x$skip_cleanup\" == \"x\\\"true\\\
+      \"\" ]];\n    then\n        ovs-vsctl del-port ${INT_BRIDGE:-\"br-int\"} $port\n\
+      \    fi\ndone\n\novs-vsctl --if-exists del-br ${TUN_BRIDGE:-\"br-tun\"}\n\n\
+      # Clean up trunk port bridges\nfor br in $(ovs-vsctl list-br | egrep 'tbr-[0-9a-f\\\
+      -]+'); do\n    ovs-vsctl --if-exists del-br $br\ndone\n"
+    dest: /usr/libexec/neutron-cleanup
+    force: true
+    mode: '0755'
+  name: Copy in cleanup script
+- copy:
+    content: '[Unit]
+
+      Description=Neutron cleanup on startup
+
+      After=openvswitch.service network.target
+
+      Before=tripleo_neutron_ovs_agent.service tripleo_neutron_dhcp.service tripleo_neutron_l3_agent.service
+      tripleo_nova_compute.service
+
+      RefuseManualStop=yes
+
+
+      [Service]
+
+      Type=oneshot
+
+      ExecStart=/usr/libexec/neutron-cleanup
+
+
+      [Install]
+
+      WantedBy=multi-user.target
+
+      '
+    dest: /usr/lib/systemd/system/neutron-cleanup.service
+    force: true
+  name: Copy in cleanup service
+- name: Enabling the cleanup service
+  service:
+    enabled: true
+    name: neutron-cleanup
+  when: not (ansible_check_mode|bool)
+- name: Make sure python3-novaclient is installed when IHA is enabled
+  package:
+    name: python3-novaclient
+    state: present
+  when: false
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent logs directory
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/placement
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/containers/httpd/placement
+    setype: container_file_t
+- community.general.sefcontext:
+    setype: container_file_t
+    state: present
+    target: /var/lib/rabbitmq(/.*)?
+  name: create fcontext for rabbitmq data
+- file:
+    mode: '{{ item.mode|default(omit) }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - path: /var/lib/rabbitmq
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/containers/rabbitmq
+    setype: container_file_t
+- name: stop the Erlang port mapper on the host and make sure it cannot bind to the
+    port used by container
+  shell: 'echo ''export ERL_EPMD_ADDRESS=127.0.0.1'' > /etc/rabbitmq/rabbitmq-env.conf
+
+    echo ''export ERL_EPMD_PORT=4370'' >> /etc/rabbitmq/rabbitmq-env.conf
+
+    for pid in $(pgrep epmd --ns 1 --nslist pid); do kill $pid; done
+
+    '
+- block:
+  - name: Set login facts
+    no_log: true
+    set_fact:
+      container_default_pids_limit: 4096
+      container_events_logger_mechanism: journald
+      container_registry_insecure_registries: []
+      container_registry_login: false
+      container_registry_logins: {}
+      container_registry_logins_json:
+        registry.redhat.io:
+          grosenbe-redhat.com: i.am.king.bison.6591
+  - name: Convert logins json to dict
+    no_log: true
+    set_fact:
+      container_registry_logins: '{{ container_registry_logins_json | from_json }}'
+    when:
+    - container_registry_logins_json is string
+    - container_registry_login | bool
+    - (container_registry_logins_json | length) > 0
+  - name: Set registry logins
+    no_log: true
+    set_fact:
+      container_registry_logins: '{{ container_registry_logins_json }}'
+    when:
+    - container_registry_logins_json is mapping
+    - container_registry_login | bool
+    - (container_registry_logins_json | length) > 0
+  - include_role:
+      name: tripleo_podman
+      tasks_from: tripleo_podman_install.yml
+    name: Run podman install
+    vars:
+      tripleo_container_default_pids_limit: '{{ container_default_pids_limit }}'
+      tripleo_container_events_logger_mechanism: '{{ container_events_logger_mechanism
+        }}'
+      tripleo_container_registry_insecure_registries: '{{ container_registry_insecure_registries
+        }}'
+  - include_role:
+      name: tripleo_podman
+      tasks_from: tripleo_podman_login.yml
+    name: Run podman login
+    vars:
+      tripleo_container_registry_login: '{{ container_registry_login | bool }}'
+      tripleo_container_registry_logins: '{{ container_registry_logins }}'
+  name: Install and configure Podman
+- copy:
+    content: 'This file makes tripleo_container_manage generate additional systemd
+
+      dependencies for containers that have special
+
+      start/stop ordering constraints. It ensures that
+
+      those constraints are enforced on reboot/shutdown.
+
+      '
+    dest: /etc/sysconfig/podman_drop_in
+  name: Configure tripleo_container_manage to generate systemd drop-in dependencies
+- include_role:
+    name: tripleo_sshd
+  vars:
+    tripleo_sshd_banner_enabled: false
+    tripleo_sshd_banner_text: ''
+    tripleo_sshd_message_of_the_day: ''
+    tripleo_sshd_motd_enabled: false
+    tripleo_sshd_password_authentication: 'no'
+    tripleo_sshd_server_options:
+      AcceptEnv:
+      - LANG LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES
+      - LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT
+      - LC_IDENTIFICATION LC_ALL LANGUAGE
+      - XMODIFIERS
+      AuthorizedKeysFile: .ssh/authorized_keys
+      ChallengeResponseAuthentication: 'no'
+      GSSAPIAuthentication: 'no'
+      GSSAPICleanupCredentials: 'no'
+      HostKey:
+      - /etc/ssh/ssh_host_rsa_key
+      - /etc/ssh/ssh_host_ecdsa_key
+      - /etc/ssh/ssh_host_ed25519_key
+      Subsystem: sftp  /usr/libexec/openssh/sftp-server
+      SyslogFacility: AUTHPRIV
+      UseDNS: 'no'
+      UsePAM: 'yes'
+      X11Forwarding: 'yes'
+- file:
+    mode: '{{ item.mode|default(omit) }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - path: /srv/node
+    setype: container_file_t
+  - path: /var/log/swift
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/containers/swift
+    setype: container_file_t
+- file:
+    mode: '{{ item.mode|default(omit) }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - path: /srv/node
+    setype: container_file_t
+  - path: /var/cache/swift
+    setype: container_file_t
+  - mode: '0750'
+    path: /var/log/containers/swift
+    setype: container_file_t
+- name: Set swift_use_local_disks fact
+  set_fact:
+    swift_use_local_disks: true
+- name: Set use_node_data_lookup fact
+  set_fact:
+    use_node_data_lookup: false
+- file:
+    path: /srv/node/d1
+    state: directory
+  name: Create Swift d1 directory if needed
+  when: swift_use_local_disks
+- name: Set fact for SwiftRawDisks
+  set_fact:
+    swift_raw_disks: {}
+  when: not use_node_data_lookup|bool
+- name: Get hiera swift::storage::disks::args
+  register: hiera_output
+  shell: hiera -c /etc/puppet/hiera.yaml swift::storage::disks::args | sed =e 's/=>/:/g'
+  when: use_node_data_lookup|bool
+- name: Set fact for swift_raw_disks
+  set_fact:
+    swift_raw_disks: '{{ hiera_output.stdout | from_json }}'
+  when: use_node_data_lookup|bool
+- community.general.filesystem:
+    dev: '{{ swift_raw_disks[item][''base_dir'']|default(''/dev'') }}/{{ item }}'
+    fstype: xfs
+    opts: -f -i size=1024
+  name: Format SwiftRawDisks
+  when: swift_raw_disks|length > 0
+  with_items: '{{ swift_raw_disks }}'
+- name: Refresh facts if SwiftRawDisks is set to get uuids if newly created partitions
+  setup:
+    filter: ansible_device_links
+    gather_subset:
+    - '!all'
+    - '!min'
+    - hardware
+  when: swift_raw_disks|length > 0
+- mount:
+    fstype: xfs
+    name: /srv/node/{{ item }}
+    opts: noatime
+    src: '{% if lsblk.results[''uuids''][item] is defined %}UUID={{ ansible_facts[''device_links''][''uuids''][item][0]
+      }}{% else %}{{ swift_raw_disks[item][''base_dir'']|default(''/dev'') }}/{{ item
+      }}{% endif %}'
+    state: mounted
+  name: Mount devices defined in SwiftRawDisks
+  when: swift_raw_disks|length > 0
+  with_items: '{{ swift_raw_disks }}'
+- become: true
+  failed_when: false
+  name: Check for NTP service
+  register: ntp_service_check
+  shell: systemctl is-active ntpd.service || systemctl is-enabled ntpd.service
+- name: Disable NTP before configuring Chrony
+  service:
+    enabled: false
+    name: ntpd
+    state: stopped
+  when:
+  - ntp_service_check.rc is defined
+  - ntp_service_check.rc == 0
+- include_role:
+    name: chrony
+  name: Install, Configure and Run Chrony
+- command: chronyc makestep
+  name: Force NTP sync
+- command: chronyc waitsync 30
+  name: Ensure system is NTP time synced
+- include_role:
+    name: tripleo_timezone
+  name: Run timezone role
+  vars:
+    tripleo_timezone: UTC
+- debug:
+    msg: 'CIDRs found in the ctlplane network tags.
+
+      '
+  name: Notice - ctlplane subnet is set
+- include_role:
+    name: tuned

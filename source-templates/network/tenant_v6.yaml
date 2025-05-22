@@ -1,0 +1,269 @@
+
+heat_template_version: wallaby
+
+description: >
+  Tenant network definition (automatically generated).
+
+parameters:
+  # the defaults here work for static IP assignment (IPAM) only
+  TenantNetCidr:
+    default: ""
+    description: Cidr for the tenant network.
+    type: string
+  TenantNetValueSpecs:
+    default: {'provider:physical_network': 'tenant', 'provider:network_type': 'flat'}
+    description: Value specs for the tenant network.
+    type: json
+  TenantNetEnableDHCP:
+    default: false
+    description: Whether to enable DHCP on the associated subnet.
+    type: boolean
+  TenantNetAdminStateUp:
+    default: false
+    description: The admin state of the network.
+    type: boolean
+  TenantNetShared:
+    default: false
+    description: Whether this network is shared across all tenants.
+    type: boolean
+  TenantNetName:
+    default: tenant
+    description: The name of the tenant network.
+    type: string
+  TenantSubnetName:
+    default: tenant_subnet
+    description: The name of the tenant subnet in Neutron.
+    type: string
+  TenantAllocationPools:
+    default: []
+    description: Ip allocation pool range for the tenant network.
+    type: json
+  IPv6AddressMode:
+    default: dhcpv6-stateful
+    description: Neutron subnet IPv6 address mode
+    type: string
+  IPv6RAMode:
+    default: dhcpv6-stateful
+    description: Neutron subnet IPv6 router advertisement mode
+    type: string
+  TenantInterfaceDefaultRoute:
+    default: ""
+    description: default route for the tenant network
+    type: string
+  TenantNetworkVlanID:
+    default: 1
+    description: Vlan ID for the tenant network traffic.
+    type: number
+  TenantRoutes:
+    default: []
+    description: >
+      Routes for the tenant network traffic.
+      JSON route e.g. [{'destination':'10.0.0.0/16', 'nexthop':'10.0.0.1'}]
+      Routes are added to the host_routes property on the subnet in neutron
+      when the network and subnet is created.
+    type: json
+  TenantMtu:
+    default: 1400
+    description: The maximum transmission unit (MTU) size(in bytes) that is
+      guaranteed to pass through the data path of the segments in the
+      Tenant network.
+    type: number
+  TenantSubnetCidr_tenant_subnet:
+    default: "172.16.3.0/24"
+    description: |
+      Cidr for the tenant network's tenant_subnet subnet.
+    type: string
+  TenantAllocationPools_tenant_subnet:
+    default: [{'start': '172.16.3.10', 'end': '172.16.3.50'}]
+    description: |
+      Ip allocation pool range for the tenant network's tenant_subnet subnet.
+    type: json
+  TenantInterfaceDefaultRoute_tenant_subnet:
+    default: "[]"
+    description: |
+       default route for the tenant network's tenant_subnet subnet.
+    type: string
+  TenantNetworkVlanID_tenant_subnet:
+    default: 3803
+    description: |
+      Vlan ID for the tenant network's tenant_subnet subnet.
+    type: number
+  TenantRoutes_tenant_subnet:
+    default: []
+    description: >
+      Routes for the tenant_subnet subnet on tenant network
+      traffic. JSON route e.g. [{'destination':'10.0.0.0/16', 'nexthop':'10.0.0.1'}]
+      Routes are added to the host_routes property on the subnet in neutron
+      when the subnet is created.
+    type: json
+  ManageNetworks:
+    default: true
+    type: boolean
+    description: >
+      Manage the network and related resources (subnets and segments) with
+      either create, update, or delete operations (depending on the stack
+      operation). Does not apply to ports which will always be managed as
+      needed. Defaults to true. For multi-stack use cases where the network
+      related resources have already been managed by a separate stack, this
+      parameter can be set to false.
+  CloudDomain:
+    default: 'localdomain'
+    type: string
+    description: >
+      The DNS domain used for the hosts. This must match the
+      overcloud_domain_name configured on the undercloud.
+  NetworkDeletionPolicy:
+    description: >
+      Whether to retain or delete network resource on deletion of the stack
+    type: string
+    default: delete
+    constraints:
+      - allowed_values: [delete, retain]
+
+
+conditions:
+  manage_networks: {get_param: ManageNetworks}
+  is_ipv6:
+    yaql:
+      expression: '":" in $.data'
+      data: {get_param: TenantNetCidr}
+
+resources:
+  TenantNetwork:
+    type: OS::Neutron::Net
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    properties:
+      admin_state_up: {get_param: TenantNetAdminStateUp}
+      name: {get_param: TenantNetName}
+      dns_domain:
+        list_join:
+          - '.'
+          - - tenant
+            - {get_param: CloudDomain}
+            - ''
+      shared: {get_param: TenantNetShared}
+      value_specs:
+        map_merge:
+          - {get_param: TenantNetValueSpecs}
+          - {'mtu': {get_param: TenantMtu}}
+      tags:
+        - tripleo_net_idx=4
+        - tripleo_network_name=Tenant
+        - tripleo_vip=False
+        - tripleo_ipv6=true
+
+  TenantSubnet:
+    type: OS::Neutron::Subnet
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    properties:
+      cidr: {get_param: TenantNetCidr}
+      name: {get_param: TenantSubnetName}
+      network: {get_resource: TenantNetwork}
+      allocation_pools: {get_param: TenantAllocationPools}
+      gateway_ip: {get_param: TenantInterfaceDefaultRoute}
+      host_routes: {get_param: TenantRoutes}
+      # All networks have an implicit network segment when created, map this subnet to that segment.
+      segment: {get_attr: [TenantNetwork, segments, 0, id]}
+      ip_version: {if: [is_ipv6, 6, 4]}
+      ipv6_address_mode: {get_param: IPv6AddressMode}
+      ipv6_ra_mode: {get_param: IPv6RAMode}
+      tags:
+        - str_replace:
+            template: tripleo_vlan_id=$vlan_id
+            params:
+              $vlan_id: {get_param: TenantNetworkVlanID}
+
+
+
+  TenantSegment_tenant_subnet:
+    type: OS::Neutron::Segment
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    # NOTE(hjensas): Depends-On here to ensure we always create the base subnet
+    #   first. We can only set the segment for existing subnet if there is only
+    #   one segment and only one existing subnet on the network.
+    depends_on: TenantSubnet
+    properties:
+      name: tenant_tenant_subnet
+      network: {get_resource: TenantNetwork}
+      network_type: flat
+      physical_network: tenant_tenant_subnet
+
+  TenantSubnet_tenant_subnet:
+    type: OS::Neutron::Subnet
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    properties:
+      cidr: {get_param: TenantSubnetCidr_tenant_subnet}
+      name: tenant_subnet
+      network: {get_resource: TenantNetwork}
+      allocation_pools: {get_param: TenantAllocationPools_tenant_subnet}
+      gateway_ip: {get_param: TenantInterfaceDefaultRoute_tenant_subnet}
+      host_routes: {get_param: TenantRoutes_tenant_subnet}
+      segment: {get_resource: TenantSegment_tenant_subnet}
+      ip_version: {if: [is_ipv6, 6, 4]}
+      ipv6_address_mode: {get_param: IPv6AddressMode}
+      ipv6_ra_mode: {get_param: IPv6RAMode}
+      tags:
+        - str_replace:
+            template: tripleo_vlan_id=$vlan_id
+            params:
+              $vlan_id: {get_param: TenantNetworkVlanID_tenant_subnet}
+
+
+
+outputs:
+  OS::stack_id:
+    description: tenant network
+    value: {get_resource: TenantNetwork}
+  ip_version:
+    description: IP version of Tenant network.
+    value: {if: [is_ipv6, 6, 4]}
+  network_cidrs:
+    description: List of Tenant network's subnets in CIDR notation.
+    value:
+      if:
+        - manage_networks
+        - - {get_attr: [TenantSubnet, cidr]}
+          - {get_attr: [TenantSubnet_tenant_subnet, cidr]}
+        - - {get_param: TenantNetCidr}
+          - {get_param: TenantSubnetCidr_tenant_subnet}
+
+  network_attrs:
+    description: Tenant network's attributes
+    value:
+      if:
+        - manage_networks
+        - {get_attr: [TenantNetwork, show]}
+        - name: tenant
+          dns_domain:
+            list_join:
+            - '.'
+            - - tenant
+              - {get_param: CloudDomain}
+              - ''
+          mtu: 1400
+
+  subnet_attrs:
+    description: Map of attributes for subnets in the Tenant network
+    value:
+      if:
+        - manage_networks
+        - tenant_subnet: {get_attr: [TenantSubnet, show]}
+          tenant_subnet: {get_attr: [TenantSubnet_tenant_subnet, show]}
+        - tenant_subnet:
+            name: tenant_subnet
+            cidr: {get_param: TenantNetCidr}
+            dns_nameservers: []
+            gateway_ip: {get_param: TenantInterfaceDefaultRoute}
+            host_routes: {get_param: TenantRoutes}
+            ip_version: {if: [is_ipv6, 6, 4]}
+          tenant_subnet:
+            name: tenant_subnet
+            cidr: {get_param: TenantSubnetCidr_tenant_subnet}
+            dns_nameservers: []
+            gateway_ip: {get_param: TenantInterfaceDefaultRoute_tenant_subnet}
+            host_routes: {get_param: TenantRoutes_tenant_subnet}
+            ip_version: {if: [is_ipv6, 6, 4]}

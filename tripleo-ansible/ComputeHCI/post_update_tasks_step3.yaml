@@ -1,0 +1,10 @@
+- include_role:
+    name: tripleo_podman
+    tasks_from: tripleo_podman_purge.yml
+  name: Purge Podman
+  vars:
+    deployment_source_hosts: Undercloud
+  when:
+  - (step | int) == 3
+  - container_cli == 'podman'
+  - deployment_source_hosts not in group_names

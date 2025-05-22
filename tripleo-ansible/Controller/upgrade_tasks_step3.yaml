@@ -1,0 +1,702 @@
+- block:
+  - name: fix grub entries to have name start with GRUB_
+    replace:
+      path: /etc/default/grub
+      regexp: ^(TRIPLEO_HEAT_TEMPLATE_KERNEL_ARGS)(.*)
+      replace: GRUB_\1\2
+  - name: fix grub entries in append statement
+    replace:
+      path: /etc/default/grub
+      regexp: (.*){(TRIPLEO_HEAT_TEMPLATE_KERNEL_ARGS)}(.*)
+      replace: \1{GRUB_\2}\3
+  name: upgrade prepare for leapp to align kernel arg shortcommings in leapp
+  tags:
+  - never
+  - system_upgrade
+  - system_upgrade_prepare
+  when:
+  - step|int == 3
+  - upgrade_leapp_enabled
+- block:
+  - name: Disable the cinder_volume cluster resource before container upgrade
+    pacemaker_resource:
+      resource: openstack-cinder-volume
+      state: disable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+  - block:
+    - block:
+      - become: true
+        name: Get cinder_volume image from pacemaker
+        register: xmllint_pcmk_cinder_volume_image
+        shell: xmllint --xpath "string(//bundle[@id='openstack-cinder-volume']/podman/@image)"
+          /var/lib/pacemaker/cib/cib.xml
+      - name: Get container cinder_volume image
+        set_fact:
+          cinder_volume_image: registry.redhat.io/rhosp-rhel9/openstack-cinder-volume:17.1.6
+          cinder_volume_image_latest: cluster.common.tag/cinder-volume:pcmklatest
+          pcmk_cinder_volume_image: '{{xmllint_pcmk_cinder_volume_image.stdout}}'
+    - block:
+      - include_role:
+          name: tripleo_container_tag
+        name: Retag pcmklatest to latest cinder_volume image
+        vars:
+          container_image: '{{cinder_volume_image}}'
+          container_image_latest: '{{cinder_volume_image_latest}}'
+    name: Retag the pacemaker image if containerized
+  - name: Enable the cinder_volume cluster resource
+    pacemaker_resource:
+      resource: openstack-cinder-volume
+      state: enable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+  name: Retag pacemaker cinder_volume
+  when:
+  - step|int == 3
+  - cinder_volume_pcs_res|bool
+  - cinder_volume_image_current != cinder_volume_image_latest
+- block:
+  - mount:
+      fstype: nfs4
+      path: /var/lib/cinder_image_conversion
+      state: absent
+    name: Unmount cinder's image conversion NFS share
+    vars:
+      image_conversion_nfs_enabled: false
+      image_conversion_nfs_options: _netdev,bg,intr,context=system_u:object_r:container_file_t:s0
+      image_conversion_nfs_share: ''
+    when: image_conversion_nfs_enabled|bool
+  name: cinder-volume pre system_upgrade tasks
+  tags:
+  - never
+  - system_upgrade
+  - system_upgrade_run
+  - system_upgrade_nfsmounts
+  when:
+  - step|int == 3
+  - upgrade_leapp_enabled
+- block:
+  - mount:
+      fstype: nfs
+      name: /var/lib/glance/images
+      state: absent
+    name: Unmount and remove NFS glance entry
+    vars:
+      glance_netapp_nfs_enabled: false
+      nfs_backend_enabled: false
+    when: nfs_backend_enabled or glance_netapp_nfs_enabled
+  - mount:
+      fstype: nfs
+      name: '{{glance_node_staging_uri[7:]}}'
+      state: absent
+    name: Unmount and remove NFS glance-staging entry
+    vars:
+      glance_node_staging_uri: file:///var/lib/glance/staging
+      glance_staging_nfs_share: ''
+    when: glance_staging_nfs_share != ''
+  name: glance-api pre system_upgrade tasks
+  tags:
+  - never
+  - system_upgrade
+  - system_upgrade_run
+  - system_upgrade_nfsmounts
+  when:
+  - step|int == 3
+  - upgrade_leapp_enabled
+- block:
+  - block:
+    - become: true
+      name: Get haproxy image from pacemaker
+      register: xmllint_pcmk_haproxy_image
+      shell: xmllint --xpath "string(//bundle[@id='haproxy-bundle']/podman/@image)"
+        /var/lib/pacemaker/cib/cib.xml
+    - name: Get container haproxy image
+      set_fact:
+        haproxy_image: registry.redhat.io/rhosp-rhel9/openstack-haproxy:17.1.6
+        haproxy_image_latest: cluster.common.tag/haproxy:pcmklatest
+        pcmk_haproxy_image: '{{xmllint_pcmk_haproxy_image.stdout}}'
+  - block:
+    - include_role:
+        name: tripleo_container_tag
+      name: Retag pcmklatest to latest haproxy image
+      vars:
+        container_image: '{{haproxy_image}}'
+        container_image_latest: '{{haproxy_image_latest}}'
+  name: Retag the pacemaker image if containerized
+  when:
+  - step|int == 3
+- block:
+  - include_role:
+      name: tripleo_persist
+      tasks_from: persist.yml
+    name: Persist mysql data
+    vars:
+      tripleo_persist_dir: /var/lib/mysql
+  tags:
+  - never
+  - system_upgrade
+  - system_upgrade_prepare
+  vars:
+    mysql_upgrade_persist: false
+  when:
+  - step|int == 3
+  - mysql_upgrade_persist
+- block:
+  - become: true
+    name: Get galera image from pacemaker
+    register: xmllint_pcmk_galera_image
+    shell: xmllint --xpath "string(//bundle[@id='galera-bundle']/podman/@image)" /var/lib/pacemaker/cib/cib.xml
+  - name: Get container galera image
+    set_fact:
+      galera_image: registry.redhat.io/rhosp-rhel9/openstack-mariadb:17.1.6
+      galera_image_latest: cluster.common.tag/mariadb:pcmklatest
+      pcmk_galera_image: '{{xmllint_pcmk_galera_image.stdout}}'
+  name: Fetch the pacemaker image if containerized
+  when:
+  - step|int == 3
+- file:
+    path: /var/lib/tripleo/mysql_needs_upgrade
+    state: touch
+  name: Create mysql upgrade state file
+  when:
+  - step|int == 3
+  - (pcmk_galera_image != "")
+  - (pcmk_galera_image != galera_image_latest)
+- name: Check if myswl upgrade state file exists
+  register: mysql_upgrade_state_file
+  stat:
+    path: /var/lib/tripleo/mysql_needs_upgrade
+  when:
+  - step|int == 3
+- name: Set fact upgrade_mysql
+  set_fact:
+    upgrade_mysql: '{{ mysql_upgrade_state_file.stat.exists|bool }}'
+  when:
+  - step|int == 3
+- name: Disable the galera cluster resource before container upgrade
+  pacemaker_resource:
+    resource: galera
+    state: disable
+    wait_for_resource: true
+  register: output
+  retries: 5
+  until: output.rc == 0
+  when:
+  - step|int == 3
+  - upgrade_mysql|bool
+- block:
+  - include_role:
+      name: tripleo_container_tag
+    name: Retag pcmklatest to latest galera image
+    vars:
+      container_image: '{{galera_image}}'
+      container_image_latest: '{{galera_image_latest}}'
+  name: Retag the pacemaker image if containerized
+  when:
+  - step|int == 3
+  - upgrade_mysql|bool
+- name: Mysql upgrade script
+  set_fact:
+    mysql_upgrade_script: "kolla_set_configs\nif mysqladmin ping --silent; then exit\
+      \ 0; fi\nupgraded_ver=$(cat /var/lib/mysql/mysql_upgrade_info 2>/dev/null ||\
+      \ true)\nmysql_ver=$(mysql --version | awk -F'[ ,]*' '{print $5}')\nif [ \"\
+      ${upgraded_ver}\" = \"${mysql_ver}\" ]; then\n    echo \"mysql already upgraded\"\
+      \n    exit 0\nfi\nchown -R mysql:mysql /var/lib/mysql\nchown -R mysql:mysql\
+      \ /var/log/mysql\nmysqld_safe --user=mysql --wsrep-provider=none --skip-networking\
+      \ --wsrep-on=off --log-error=/var/log/mysql/mysqld-upgrade.log &\n\n#!/usr/bin/bash\n\
+      \nset -e\n\n# Wait until we know the mysql server is up and responding\ntimeout\
+      \ ${DB_MAX_TIMEOUT:-60} /bin/bash -c 'until mysqladmin -uroot ping 2>/dev/null;\
+      \ do sleep 1; done'\n\n# After an upgrade, make sure that the running mysql\
+      \ had a chance to\n# update its data table on disk.\nmysql_upgrade\n\n# Upgrade\
+      \ to 10.3: the default table row format changed from COMPACT\n# to DYNAMIC,\
+      \ so upgrade the existing tables.\ncompact_tables=$(mysql -se 'SELECT CONCAT(\"\
+      `\",TABLE_SCHEMA,\"`.`\",TABLE_NAME,\"`\") FROM information_schema.tables WHERE\
+      \ ENGINE = \"InnoDB\" and ROW_FORMAT = \"Compact\";');\nfor i in $compact_tables;\
+      \ do echo converting row format of table $i; mysql -e \"ALTER TABLE $i ROW_FORMAT=DYNAMIC;\"\
+      ; done;\n\nmysqladmin shutdown"
+  when:
+  - step|int == 3
+  - upgrade_mysql|bool
+- name: Bind mounts for temporary container
+  set_fact:
+    mysql_upgrade_db_bind_mounts:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/mysql.json:/var/lib/kolla/config_files/config.json:rw,z
+    - /var/lib/config-data/puppet-generated/mysql:/var/lib/kolla/config_files/src:ro,z
+    - /var/lib/mysql:/var/lib/mysql:rw,z
+    - /var/log/containers/mysql:/var/log/mysql:rw,z
+  when:
+  - step|int == 3
+  - upgrade_mysql|bool
+- environment:
+    UPGRADE_SCRIPT: '{{ mysql_upgrade_script }}'
+  name: Upgrade Mysql database from a temporary container
+  shell: '{{ container_cli }} run --rm --log-driver=k8s-file --log-opt path=/var/log/containers/mysql/db-upgrade.log
+    \ -u root --net=host -e "KOLLA_CONFIG_STRATEGY=COPY_ALWAYS" -v {{ mysql_upgrade_db_bind_mounts
+    | join('' -v '')}} "cluster.common.tag/mariadb:pcmklatest" /bin/bash -ecx "$UPGRADE_SCRIPT"'
+  when:
+  - step|int == 3
+  - upgrade_mysql|bool
+- file:
+    path: /var/lib/tripleo/mysql_needs_upgrade
+    state: absent
+  name: Remove state file for mysql upgrade
+  when:
+  - step|int == 3
+  - upgrade_mysql|bool
+- name: Enable the galera cluster resource
+  pacemaker_resource:
+    resource: galera
+    state: enable
+    wait_for_resource: true
+  register: output
+  retries: 5
+  until: output.rc == 0
+  when:
+  - step|int == 3
+  - upgrade_mysql|bool
+- name: set first_controller fact
+  set_fact:
+    first_controller: '{{ groups[''ovn_controller'']|first|lower == ansible_facts[''hostname'']|lower
+      }}'
+- block:
+  - async: 600
+    become: true
+    containers.podman.podman_image:
+      force: true
+      name: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+      validate_certs: false
+    delegate_to: '{{ item }}'
+    loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+      }}'
+    name: Force pull image in case image name doesn't change.
+    poll: 0
+    register: ovn_controller_image_update
+    tags:
+    - ovn
+    - ovn_image
+    when: step|int == 1
+  - async_status:
+      jid: '{{ async_result_item.ansible_job_id }}'
+    become: true
+    delay: 1
+    delegate_to: '{{ async_result_item.item }}'
+    loop: '{{ovn_controller_image_update.results }}'
+    loop_control:
+      loop_var: async_result_item
+    name: Was the ovn_controller image pull successful.
+    register: async_poll_results
+    retries: 600
+    tags:
+    - ovn
+    - ovn_image
+    until: async_poll_results.finished
+    when:
+    - step|int == 1
+    - '''results'' in ovn_controller_image_update'
+  - debug:
+      msg: ovn container will be using {{ image }}
+    name: OVN Container image used
+    tags: ovn
+    vars:
+      image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+    when: step|int == 1
+  - async: 600
+    become: true
+    delegate_to: '{{ item }}'
+    loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+      }}'
+    name: Update OVN OVS related parameters before update.
+    poll: 0
+    register: ovs_vsctl
+    shell: 'set -e
+
+      ovs-vsctl set Open_vSwitch . external_ids:ovn-ofctrl-wait-before-clear={{ timeout
+      }}
+
+      ovs-vsctl set Open_vSwitch . external_ids:ovn-monitor-all=true
+
+      ovs-vsctl set Open_vSwitch . external_ids:ovn-match-northd-version=false
+
+      '
+    tags:
+    - ovn
+    vars:
+      timeout: 8000
+    when:
+    - step|int == 1
+  - async_status:
+      jid: '{{ async_result_item.ansible_job_id }}'
+    become: true
+    delay: 1
+    delegate_to: '{{ async_result_item.item }}'
+    loop: '{{ovs_vsctl.results }}'
+    loop_control:
+      loop_var: async_result_item
+    name: Was the update of OVN OVS related parameter successful.
+    register: async_poll_results
+    retries: 600
+    tags:
+    - ovn
+    until: async_poll_results.finished
+    when:
+    - step|int == 1
+    - '''results'' in ovs_vsctl'
+  - set_fact:
+      any_ovn_host: '{{groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+        | first }}'
+    tags: ovn
+    when: step|int == 1
+  - become: true
+    delegate_to: '{{ any_ovn_host }}'
+    find:
+      paths: /var/lib/tripleo-config/container-startup-config/
+      patterns: '*ovn_controller.json'
+      recurse: true
+    name: Find ovn_controller configs in container-startup-configs
+    register: ovn_cont_17_0
+    tags:
+    - ovn
+    when: (step|int == 1) and (any_ovn_host is defined) and (any_ovn_host|length >
+      0)
+  - name: get directory path from the ovn_cont_17_0
+    set_fact:
+      ovn_config_path: '{{ ovn_cont_17_0.files.0.path | dirname }}'
+    tags: ovn
+    when: step|int == 1
+  - async: 600
+    become: true
+    delegate_to: '{{ item }}'
+    loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+      }}'
+    name: Update ovn_controller.
+    poll: 0
+    register: ovn_controller_update
+    tags: ovn
+    tripleo_container_manage:
+      config_dir: '{{ ovn_config_path }}'
+      config_id:
+      - tripleo_step{{config_step}}
+      config_overrides:
+        .*ovn_controller:
+          image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+          name: ovn_controller
+      config_patterns: '*ovn_controller.json'
+      debug: '{{ enable_debug | bool }}'
+      log_base_path: '{{ container_log_stdout_path }}'
+    vars:
+      config_step: '{{ (''step_4'' in ovn_config_path) | ternary(''4'', ''3'')}}'
+    when: step|int == 1
+  - async_status:
+      jid: '{{ async_result_item.ansible_job_id }}'
+    become: true
+    delay: 1
+    delegate_to: '{{ async_result_item.item }}'
+    loop: '{{ovn_controller_update.results }}'
+    loop_control:
+      loop_var: async_result_item
+    name: Was the ovn_controller successful.
+    register: async_poll_results
+    retries: 600
+    tags: ovn
+    until: async_poll_results.finished
+    when:
+    - step|int == 1
+    - '''results'' in ovn_controller_update'
+  name: Trigger external_update OVN block on first controller
+  when: first_controller | bool
+- block:
+  - name: Disable the rabbitmq cluster resource before container upgrade
+    pacemaker_resource:
+      resource: rabbitmq-bundle
+      state: disable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+  - block:
+    - block:
+      - become: true
+        name: Get rabbitmq image from pacemaker
+        register: xmllint_pcmk_rabbitmq_image
+        shell: xmllint --xpath "string(//bundle[@id='rabbitmq-bundle']/podman/@image)"
+          /var/lib/pacemaker/cib/cib.xml
+      - name: Get container rabbitmq image
+        set_fact:
+          pcmk_rabbitmq_image: '{{xmllint_pcmk_rabbitmq_image.stdout}}'
+          rabbitmq_image: registry.redhat.io/rhosp-rhel9/openstack-rabbitmq:17.1.6
+          rabbitmq_image_latest: cluster.common.tag/rabbitmq:pcmklatest
+    - block:
+      - include_role:
+          name: tripleo_container_tag
+        name: Retag pcmklatest to latest rabbitmq image
+        vars:
+          container_image: '{{rabbitmq_image}}'
+          container_image_latest: '{{rabbitmq_image_latest}}'
+    name: Retag the pacemaker image if containerized
+  - name: Enable the rabbitmq cluster resource
+    pacemaker_resource:
+      resource: rabbitmq-bundle
+      state: enable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+  name: Retag rabbitmq-bundle container image
+  when:
+  - step|int == 3
+  - rabbitmq_pcs_res|bool
+  - rabbitmq_image_current != rabbitmq_image_latest
+- block:
+  - args:
+      creates: /etc/sysconfig/ip6tables.n-o-upgrade
+    name: blank ipv6 rule before activating ipv6 firewall.
+    shell: cat /etc/sysconfig/ip6tables > /etc/sysconfig/ip6tables.n-o-upgrade; cat</dev/null>/etc/sysconfig/ip6tables
+  - name: cleanup unmanaged rules pushed by iptables-services
+    shell: "iptables -C INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT &>/dev/null\
+      \ && \\\n  iptables -D INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT\n\
+      iptables -C INPUT -p icmp -j ACCEPT &>/dev/null && \\\n  iptables -D INPUT -p\
+      \ icmp -j ACCEPT\niptables -C INPUT -i lo -j ACCEPT &>/dev/null && \\\n  iptables\
+      \ -D INPUT -i lo -j ACCEPT\niptables -C INPUT -p tcp -m state --state NEW -m\
+      \ tcp --dport 22 -j ACCEPT &>/dev/null && \\\n  iptables -D INPUT -p tcp -m\
+      \ state --state NEW -m tcp --dport 22 -j ACCEPT\niptables -C INPUT -j REJECT\
+      \ --reject-with icmp-host-prohibited &>/dev/null && \\\n  iptables -D INPUT\
+      \ -j REJECT --reject-with icmp-host-prohibited\niptables -C FORWARD -j REJECT\
+      \ --reject-with icmp-host-prohibited &>/dev/null && \\\n  iptables -D FORWARD\
+      \ -j REJECT --reject-with icmp-host-prohibited\n\nsed -i '/^-A INPUT -m state\
+      \ --state RELATED,ESTABLISHED -j ACCEPT$/d' /etc/sysconfig/iptables\nsed -i\
+      \ '/^-A INPUT -p icmp -j ACCEPT$/d' /etc/sysconfig/iptables\nsed -i '/^-A INPUT\
+      \ -i lo -j ACCEPT$/d' /etc/sysconfig/iptables\nsed -i '/^-A INPUT -p tcp -m\
+      \ state --state NEW -m tcp --dport 22 -j ACCEPT$/d' /etc/sysconfig/iptables\n\
+      sed -i '/^-A INPUT -j REJECT --reject-with icmp-host-prohibited$/d' /etc/sysconfig/iptables\n\
+      sed -i '/^-A FORWARD -j REJECT --reject-with icmp-host-prohibited$/d' /etc/sysconfig/iptables\n\
+      \nip6tables -C INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT &>/dev/null\
+      \ && \\\n  ip6tables -D INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT\n\
+      ip6tables -C INPUT -p ipv6-icmp -j ACCEPT &>/dev/null && \\\n  ip6tables -D\
+      \ INPUT -p ipv6-icmp -j ACCEPT\nip6tables -C INPUT -i lo -j ACCEPT &>/dev/null\
+      \ && \\\n  ip6tables -D INPUT -i lo -j ACCEPT\nip6tables -C INPUT -p tcp -m\
+      \ state --state NEW -m tcp --dport 22 -j ACCEPT &>/dev/null && \\\n  ip6tables\
+      \ -D INPUT -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT\nip6tables\
+      \ -C INPUT -d fe80::/64 -p udp -m udp --dport 546 -m state --state NEW -j ACCEPT\
+      \ &>/dev/null && \\\n  ip6tables -D INPUT -d fe80::/64 -p udp -m udp --dport\
+      \ 546 -m state --state NEW -j ACCEPT\nip6tables -C INPUT -j REJECT --reject-with\
+      \ icmp6-adm-prohibited &>/dev/null && \\\n  ip6tables -D INPUT -j REJECT --reject-with\
+      \ icmp6-adm-prohibited\nip6tables -C FORWARD -j REJECT --reject-with icmp6-adm-prohibited\
+      \ &>/dev/null && \\\n  ip6tables -D FORWARD -j REJECT --reject-with icmp6-adm-prohibited\n\
+      \nsed -i '/^-A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT$/d' /etc/sysconfig/ip6tables\n\
+      sed -i '/^-A INPUT -p ipv6-icmp -j ACCEPT$/d' /etc/sysconfig/ip6tables\nsed\
+      \ -i '/^-A INPUT -i lo -j ACCEPT$/d' /etc/sysconfig/ip6tables\nsed -i '/^-A\
+      \ INPUT -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT$/d' /etc/sysconfig/ip6tables\n\
+      sed -i '/^-A INPUT -d fe80::\\/64 -p udp -m udp --dport 546 -m state --state\
+      \ NEW -j ACCEPT$/d' /etc/sysconfig/ip6tables\nsed -i '/^-A INPUT -j REJECT --reject-with\
+      \ icmp6-adm-prohibited$/d' /etc/sysconfig/ip6tables\nsed -i '/^-A FORWARD -j\
+      \ REJECT --reject-with icmp6-adm-prohibited$/d' /etc/sysconfig/ip6tables"
+  when:
+  - (step | int) == 3
+- name: Gather missing facts
+  setup:
+    gather_subset:
+    - '!all'
+    - '!min'
+    - distribution
+  tags:
+  - always
+- name: Set leapp facts
+  set_fact:
+    upgrade_leapp_command_options: ''
+    upgrade_leapp_debug: false
+    upgrade_leapp_devel_skip: ''
+    upgrade_leapp_enabled: "{{ _upgradeLeappEnabled | bool and\n   ansible_facts['distribution']\
+      \ == 'RedHat' and\n   ansible_facts['distribution_major_version'] is version('8',\
+      \ '==') }}"
+    upgrade_leapp_post_reboot_delay: 120
+    upgrade_leapp_reboot_timeout: 3600
+  tags:
+  - always
+  vars:
+    _upgradeLeappEnabled: false
+- block:
+  - name: Run LeappRepoInitCommand
+    shell: '#!/bin/bash
+
+
+      '
+  - name: install leapp
+    package:
+      name: leapp-repository-openstack
+      state: latest
+  - name: Run LeappInitCommand
+    shell: '#!/bin/bash
+
+
+      '
+  - lineinfile:
+      line: '{{ item }}'
+      path: /etc/leapp/transaction/to_remove
+    loop: '{{ pkg_to_remove }}'
+    name: add packages into Leapp's to_remove file
+    vars:
+      pkg_to_remove: []
+  - lineinfile:
+      line: '{{ item }}'
+      path: /etc/leapp/transaction/to_install
+    loop: '{{ pkg_to_install }}'
+    name: add packages into Leapp's to_install file
+    vars:
+      pkg_to_install: []
+  - name: check sshd_config file
+    register: sshd_config_result
+    stat:
+      path: /etc/ssh/sshd_config
+  - lineinfile:
+      line: PermitRootLogin without-password
+      path: /etc/ssh/sshd_config
+      regexp: ^(# *)?PermitRootLogin
+    name: add PermitRootLogin option for leapp
+  name: system_upgrade_prepare step 3
+  tags:
+  - never
+  - system_upgrade
+  - system_upgrade_prepare
+  when:
+  - step|int == 3
+  - upgrade_leapp_enabled
+- block:
+  - block:
+    - name: Run UpgradeInitCommand
+      shell: '#!/bin/bash
+
+
+        if [[ -f /etc/resolv.conf.save ]] ; then rm /etc/resolv.conf.save; fi
+
+
+        '
+    - name: Run UpgradeInitCommonCommand
+      shell: '#!/bin/bash
+
+
+        '
+    - dnf:
+        name: '@{{ item.module }}:{{ item.stream }}/{{ item.profile|default(''common'')
+          }}'
+        state: present
+      loop: '{{ dnf_module_list|list }}'
+      name: Ensure DNF modules have the right stream
+      vars:
+        dnf_module_list: []
+      when:
+      - dnf_module_list|length > 0
+      - item.distribution_version is defined
+      - ansible_facts['distribution_major_version'] is version(item.distribution_version,
+        '==')
+    - name: Ensure TripleO prerequisite packages are installed
+      package:
+        name:
+        - jq
+        - lvm2
+        - openstack-selinux
+        - os-net-config
+        - puppet-tripleo
+        - python3-heat-agent*
+        - rsync
+        state: present
+      when: ansible_facts['distribution_major_version'] is version('8', '==')
+    - name: Ensure TripleO prerequisite packages are installed and use role based
+        heat variable to provide specific list of packages
+      package:
+        name: '{{ base_tripleo_packages }}'
+        state: present
+      vars:
+        base_tripleo_packages: []
+      when:
+      - ansible_facts['distribution_major_version'] is version('8', '==')
+      - base_tripleo_packages|length > 0
+    - name: WA for 2240185 - If the image is schema 1 and lacks signatures than add
+        empty signatures
+      shell: "for manifest_file in `find /var/lib/containers/storage/overlay-images/\
+        \ -name 'manifest'`\ndo\n    cat <<< $( jq  'if .schemaVersion == 1 then if\
+        \ has(\"signatures\") then . else .signatures=[] end else . end' $manifest_file\
+        \ ) > $manifest_file\ndone\n"
+      when: ansible_facts['distribution_major_version'] is version('8', '==')
+    name: Package and repo update tasks
+    when: step|int == 0
+  - check_mode: false
+    command: /usr/bin/rpm -q libvirt-daemon
+    failed_when: false
+    name: check if libvirt is installed
+    register: libvirt_installed
+    when: step|int == 0
+  - loop:
+    - libvirtd.service
+    - virtlogd.socket
+    name: make sure libvirt services are disabled and masked
+    service:
+      daemon_reload: true
+      enabled: false
+      masked: true
+      name: '{{ item }}'
+      state: stopped
+    when:
+    - step|int == 0
+    - libvirt_installed.rc == 0
+  - name: Special treatment for OpenvSwitch
+    register: ovs_upgrade
+    tripleo_ovs_upgrade: null
+    when:
+    - step|int == 2
+  - name: Always ensure the openvswitch service is enabled and running after upgrades
+    service:
+      enabled: true
+      name: openvswitch
+      state: started
+    when:
+    - step|int == 2
+    - ovs_upgrade.changed|bool
+  - name: Check for os-net-config upgrade
+    register: os_net_config_need_upgrade
+    shell: yum check-upgrade | awk '/os-net-config/{print}'
+    when: step|int == 3
+  - name: Check that os-net-config has configuration
+    register: stat_config_json
+    stat:
+      get_attributes: false
+      get_checksum: false
+      get_mime: false
+      path: /etc/os-net-config/config.json
+    when: step|int == 3
+  - block:
+    - name: Upgrade os-net-config
+      package: name=os-net-config state=latest
+    - changed_when: os_net_config_upgrade.rc == 2
+      command: os-net-config --no-activate -c /etc/os-net-config/config.json -v --detailed-exit-codes
+      failed_when: os_net_config_upgrade.rc not in [0,2]
+      name: take new os-net-config parameters into account now
+      register: os_net_config_upgrade
+    when:
+    - step|int == 3
+    - os_net_config_need_upgrade.stdout
+    - stat_config_json.stat.exists
+  - name: Update all packages
+    vars:
+      skip_package_update: false
+    when:
+    - step|int == 3
+    - not skip_package_update|bool
+    yum:
+      exclude: ansible-core
+      name: '*'
+      state: latest
+  name: Host packages setup
+  tags: setup_packages

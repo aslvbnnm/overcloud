@@ -1,0 +1,21 @@
+- failed_when: false
+  name: Remove openstack-nova-compute and python-nova package during upgrade
+  package:
+    name:
+    - openstack-nova-compute
+    - python-nova
+    state: removed
+  when: step|int == 2
+- name: Special treatment for OpenvSwitch
+  register: ovs_upgrade
+  tripleo_ovs_upgrade: null
+  when:
+  - step|int == 2
+- name: Always ensure the openvswitch service is enabled and running after upgrades
+  service:
+    enabled: true
+    name: openvswitch
+    state: started
+  when:
+  - step|int == 2
+  - ovs_upgrade.changed|bool
