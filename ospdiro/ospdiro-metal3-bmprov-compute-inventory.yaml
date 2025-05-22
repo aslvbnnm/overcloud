@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ospdiro-bmc0-secret
+  namespace: openshift-machine-api
+type: Opaque
+data:
+  username: cm9vdA==
+  password: MjQwMEJAVUQh
+---
+apiVersion: metal3.io/v1alpha1
+kind: BareMetalHost
+metadata:
+  name: ospdiro-compute-0
+  namespace: openshift-machine-api
+spec:
+  online: false
+  bootMACAddress: B4:96:91:BB:D6:86
+  hardwareProfile: dell
+  bootMode: UEFI
+  rootDeviceHints:
+    deviceName: '/dev/sda'
+  networkConfig:
+    interfaces:
+    - name: eno12399
+      type: ethernet
+      state: up
+      mtu: 1500
+      ipv4:
+      address:
+      - ip: "192.168.131.17"
+        prefix-length: 25
+      enabled: true
+    dns-resolver:
+      config:
+        server:
+        - 192.168.131.20
+    routes:
+      config:
+      - destination: 0.0.0.0/0
+        next-hop-address: 192.168.131.1
+        next-hop-interface: eno12399
+  bmc:
+    address: idrac-virtualmedia://192.168.131.156/redfish/v1/Systems/System.Embedded.1
+    credentialsName: ospdiro-bmc0-secret
+    disableCertificateVerification: True
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ospdiro-bmc1-secret
+  namespace: openshift-machine-api
+type: Opaque
+data:
+  username: cm9vdA==
+  password: MjQwMEJAVUQh
+---
+apiVersion: metal3.io/v1alpha1
+kind: BareMetalHost
+metadata:
+  name: ospdiro-compute-1
+  namespace: openshift-machine-api
+spec:
+  online: false
+  bootMACAddress: B4:96:91:BB:D7:1A
+  hardwareProfile: dell
+  bootMode: UEFI
+  rootDeviceHints:
+    deviceName: '/dev/sda'
+  networkConfig:
+    interfaces:
+    - name: eno12399
+      type: ethernet
+      state: up
+      mtu: 1500
+      ipv4:
+        address:
+        - ip: "192.168.131.18"
+          prefix-length: 25
+        enabled: true
+    dns-resolver:
+      config:
+        server:
+        - 192.168.131.20
+    routes:
+      config:
+      - destination: 0.0.0.0/0
+        next-hop-address: 192.168.131.1
+        next-hop-interface: eno12399
+  bmc:
+    address: idrac-virtualmedia://192.168.131.157/redfish/v1/Systems/System.Embedded.1
+    credentialsName: ospdiro-bmc1-secret
+    disableCertificateVerification: True
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ospdiro-bmc2-secret
+  namespace: openshift-machine-api
+type: Opaque
+data:
+  username: cm9vdA==
+  password: MjQwMEJAVUQh
+---
+apiVersion: metal3.io/v1alpha1
+kind: BareMetalHost
+metadata:
+  name: ospdiro-compute-2
+  namespace: openshift-machine-api
+spec:
+  online: false
+  bootMACAddress: B4:96:91:C6:73:6A
+    #hardwareProfile:
+  bootMode: UEFI
+  rootDeviceHints:
+    deviceName: '/dev/sda'
+  networkConfig:
+    interfaces:
+    - name: eno12399
+      type: ethernet
+      state: up
+      mtu: 1500
+      ipv4:
+        address:
+        - ip: "192.168.131.19"
+          prefix-length: 25
+        enabled: true
+    dns-resolver:
+      config:
+        server:
+        - 192.168.131.20
+    routes:
+      config:
+      - destination: 0.0.0.0/0
+        next-hop-address: 192.168.131.1
+        next-hop-interface: eno12399
+  bmc:
+    address: redfish-virtualmedia://192.168.131.155/redfish/v1/Systems/1
+    credentialsName: ospdiro-bmc2-secret
+    disableCertificateVerification: True
+
+

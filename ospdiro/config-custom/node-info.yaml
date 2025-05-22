@@ -1,0 +1,10 @@
+parameter_defaults:
+   SELinuxMode: 'permissive'
+   NeutronBridgeMappings: 'datacentre:br-osp'
+   NtpServer: 0.rhel.pool.ntp.org
+   CloudDomain: turbo.lab.test
+   CloudName: overcloud.turbo.lab.test
+   CloudNameInternal: overcloud.internalapi.turbo.lab.test
+   CloudNameStorage: overcloud.storage.turbo.lab.test
+   CloudNameStorageManagement: overcloud.storagemgmt.turbo.lab.test
+   CloudNameCtlplane: overcloud.ctlplane.turbo.lab.test

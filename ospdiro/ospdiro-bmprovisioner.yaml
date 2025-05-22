@@ -1,0 +1,9 @@
+apiVersion: osp-director.openstack.org/v1beta1
+kind: OpenStackProvisionServer
+metadata:
+  name: openstack-provision-server
+  namespace: openstack
+spec:
+  baseImageUrl: http://192.168.131.20/rhel-9.2-x86_64-kvm.qcow2
+  port: 45250
+  interface: br-ex

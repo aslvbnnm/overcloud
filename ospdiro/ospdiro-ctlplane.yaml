@@ -1,0 +1,33 @@
+apiVersion: osp-director.openstack.org/v1beta2
+kind: OpenStackControlPlane
+metadata:
+  name: overcloud
+  namespace: openstack
+spec:
+  openStackClientNetworks:
+        - ctlplane
+        - internal_api
+  openStackClientStorageClass: lvms-vg2
+  passwordSecret: rootpassword
+  virtualMachineRoles:
+    Controller:
+      roleName: Controller
+      roleCount: 3
+      networks:
+        - ctlplane
+        - internal_api
+        - tenant
+        - storage
+        - storage_mgmt
+      cores: 16
+      memory: 48
+      rootDisk:
+        diskSize: 300
+        baseImageVolumeName: osp-controller-image
+        storageClass: lvms-vg2
+        storageAccessMode:  ReadWriteOnce
+        storageVolumeMode: Block
+        dedicatedIOThread: true
+      # optional configure additional discs to be attached to the VMs,
+      # need to be configured manually inside the VMs where to be used.
+  openStackRelease: "17.1"

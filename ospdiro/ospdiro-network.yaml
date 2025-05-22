@@ -1,0 +1,115 @@
+apiVersion: osp-director.openstack.org/v1beta1
+kind: OpenStackNetConfig
+metadata:
+  name: openstacknetconfig
+spec:
+  attachConfigurations:
+    br-osp:
+      nodeNetworkConfigurationPolicy:
+        nodeSelector:
+          node-role.kubernetes.io/master: ""
+        desiredState:
+          interfaces:
+          - bridge:
+              options:
+                stp:
+                  enabled: false
+              port:
+              - name: enp10s0
+            description: Linux bridge with enp15s0 as a port
+            name: br-osp
+            state: up
+            type: linux-bridge
+            mtu: 9000
+    br-ex:
+      nodeNetworkConfigurationPolicy:
+        nodeSelector:
+          node-role.kubernetes.io/master: ""
+        desiredState:
+          interfaces:
+          - bridge:
+              options:
+                stp:
+                  enabled: false
+              port:
+              - name: enp11s0
+            description: Linux bridge with enp16s0 as a port
+            name: br-ex
+            state: up
+            type: linux-bridge
+            mtu: 9000
+ # optional DnsServers list
+  dnsServers:
+  - 192.168.130.1
+  - 192.168.150.250   
+ # optional DnsSearchDomains list
+  dnsSearchDomains:
+  - demo.lab.com
+ # DomainName of the OSP environment
+  domainName: demo.lab.com
+  networks:
+  - name: Control
+    nameLower: ctlplane
+    subnets:
+    - name: ctlplane
+      ipv4:
+        allocationEnd: 192.168.130.50
+        allocationStart: 192.168.130.10
+        cidr: 192.168.130.0/24
+        gateway: 192.168.130.1
+      attachConfiguration: br-osp
+  - name: InternalApi
+    nameLower: internalapi
+    mtu: 8900
+    subnets:
+    - name: internalapi
+      attachConfiguration: br-osp
+      vlan: 20
+      ipv4:
+        allocationEnd: 172.17.0.50
+        allocationStart: 172.17.0.10
+        cidr: 172.17.0.0/24
+  - name: External
+    nameLower: external
+    subnets:
+    - name: external
+      ipv4:
+        allocationEnd: 192.168.150.77
+        allocationStart: 192.168.150.60
+        cidr: 192.168.150.0/24
+        gateway: 192.168.150.254
+      attachConfiguration: br-ex
+  - name: Storage
+    nameLower: storage
+    mtu: 8900
+    subnets:
+    - name: storage
+      ipv4:
+        allocationEnd: 172.18.0.50
+        allocationStart: 172.18.0.10
+        cidr: 172.18.0.0/24
+      vlan: 30
+      attachConfiguration: br-osp
+  - name: StorageMgmt
+    nameLower: storagemgmt
+    mtu: 8900
+    subnets:
+    - name: storagemgmt
+      ipv4:
+        allocationEnd: 172.19.0.50
+        allocationStart: 172.19.0.10
+        cidr: 172.19.0.0/24
+      vlan: 40
+      attachConfiguration: br-osp
+  - name: Tenant
+    nameLower: tenant
+    vip: False
+    mtu: 8900
+    subnets:
+    - name: tenant
+      ipv4:
+        allocationEnd: 172.20.0.50
+        allocationStart: 172.20.0.10
+        cidr: 172.20.0.0/24
+      vlan: 50
+      attachConfiguration: br-osp
