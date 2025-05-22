@@ -13,8 +13,8 @@
   tasks:
     - name: Register system 
       redhat_subscription:
-        username: grosenbe-redhat.com
-        password: i.am.king.bison.6591
+        username: XXXXXXX
+        password: XxXxXxX
         #org_id: 1234567
         release: 9.2
         #pool_ids: 1a85f9223e3d5e43013e3d6e8ff506fd
