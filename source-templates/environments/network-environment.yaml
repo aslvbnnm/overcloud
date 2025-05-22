@@ -1,0 +1,86 @@
+#This file is an example of an environment file for defining the isolated
+#networks and related parameters.
+resource_registry:
+  # Network Interface templates to use (these files must exist). You can
+  # override these by including one of the net-*.yaml environment files,
+  # such as net-bond-with-vlans.yaml, or modifying the list here.
+  # Port assignments for the Controller
+  OS::TripleO::Controller::Net::SoftwareConfig: OS::Heat::None
+  # Port assignments for the ComputeHCI
+  OS::TripleO::ComputeHCI::Net::SoftwareConfig: OS::Heat::None
+
+parameter_defaults:
+  # This section is where deployment-specific configuration is done
+  #
+  ControllerNetworkConfigTemplate: 'templates/single_nic_vlans/single_nic_vlans.j2'
+  ComputeHCINetworkConfigTemplate: 'templates/single_nic_vlans/single_nic_vlans.j2'
+
+
+  # Customize the IP subnet to match the local environment
+  ExternalNetCidr: ''
+  # Customize the IP range to use for static IPs and VIPs
+  # Leave room if the external network is also used for floating IPs
+  ExternalAllocationPools: 
+
+  ExternalSubnetCidr_external_subnet: 192.168.131.0/25
+  ExternalAllocationPools_external_subnet: [{'start': '192.168.131.60', 'end': '192.168.131.100'}]
+  ExternalInterfaceDefaultRoute_external_subnet: 192.168.131.1
+
+
+  # Customize the IP subnet to match the local environment
+  InternalApiNetCidr: ''
+  # Customize the IP range to use for static IPs and VIPs
+  InternalApiAllocationPools: 
+
+  InternalApiSubnetCidr_internal_api_subnet: 172.16.2.0/24
+  InternalApiAllocationPools_internal_api_subnet: [{'start': '172.16.2.10', 'end': '172.16.2.50'}]
+  InternalApiInterfaceDefaultRoute_internal_api_subnet: 
+  InternalApiNetworkVlanID_internal_api_subnet: 3802
+
+
+  # Customize the IP subnet to match the local environment
+  StorageNetCidr: ''
+  # Customize the IP range to use for static IPs and VIPs
+  StorageAllocationPools: 
+
+  StorageSubnetCidr_storage_subnet: 172.16.4.0/24
+  StorageAllocationPools_storage_subnet: [{'start': '172.16.4.10', 'end': '172.16.4.50'}]
+  StorageInterfaceDefaultRoute_storage_subnet: 
+  StorageNetworkVlanID_storage_subnet: 3804
+
+
+  # Customize the IP subnet to match the local environment
+  StorageMgmtNetCidr: ''
+  # Customize the IP range to use for static IPs and VIPs
+  StorageMgmtAllocationPools: 
+
+  StorageMgmtSubnetCidr_storage_mgmt_subnet: 172.16.5.0/24
+  StorageMgmtAllocationPools_storage_mgmt_subnet: [{'start': '172.16.5.10', 'end': '172.16.5.50'}]
+  StorageMgmtInterfaceDefaultRoute_storage_mgmt_subnet: 
+  StorageMgmtNetworkVlanID_storage_mgmt_subnet: 3805
+
+
+  # Customize the IP subnet to match the local environment
+  TenantNetCidr: ''
+  # Customize the IP range to use for static IPs and VIPs
+  TenantAllocationPools: 
+  # MTU of the underlying physical network. Neutron uses this value to
+  # calculate MTU for all virtual network components. For flat and VLAN
+  # networks, neutron uses this value without modification. For overlay
+  # networks such as VXLAN, neutron automatically subtracts the overlay
+  # protocol overhead from this value.
+  TenantNetPhysnetMtu: 1400
+
+  TenantSubnetCidr_tenant_subnet: 172.16.3.0/24
+  TenantAllocationPools_tenant_subnet: [{'start': '172.16.3.10', 'end': '172.16.3.50'}]
+  TenantInterfaceDefaultRoute_tenant_subnet: 
+  TenantNetworkVlanID_tenant_subnet: 3803
+
+
+  # List of Neutron network types for tenant networks (will be used in order)
+  NeutronNetworkType: 'geneve,vlan'
+  # Neutron VLAN ranges per network, for example 'datacentre:1:499,tenant:500:1000':
+  NeutronNetworkVLANRanges: 'datacentre:1:1000'
+  # Customize bonding options, e.g. "mode=4 lacp_rate=1 updelay=1000 miimon=100"
+  # for Linux bonds w/LACP, or "bond_mode=active-backup" for OVS active/backup.
+  BondInterfaceOvsOptions: "bond_mode=active-backup"

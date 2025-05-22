@@ -1,0 +1,148 @@
+- failed_when: false
+  name: Remove openstack-nova-compute and python-nova package during upgrade
+  package:
+    name:
+    - openstack-nova-compute
+    - python-nova
+    state: removed
+  when: step|int == 2
+- block:
+  - file:
+      path: /etc/tmpfiles.d/var-run-libvirt.conf
+      state: absent
+    name: Remove old tmpfiles.d config
+  name: nova_libvirt_container_tmpfile_cleanup
+  when: step|int == 1
+- block:
+  - file:
+      path: /etc/tmpfiles.d/var-run-libvirt.conf
+      state: absent
+    name: Remove old tmpfiles.d config
+  name: nova_migration_target_tmpfile_cleanup
+  when: step|int == 1
+- file:
+    path: /etc/cron.daily/containers-tmpwatch
+    state: absent
+  name: Ensure old cron.daily is absent
+  when: step|int == 1
+- block:
+  - become: true
+    containers.podman.podman_image:
+      force: true
+      name: '{{ prefetch_image }}'
+      validate_certs: false
+    delay: 5
+    loop: '{{ lookup(''template'', tripleo_role_name + ''/docker_config.yaml'', errors=''ignore'')
+      | default(''{}'', True) | from_yaml | recursive_get_key_from_dict(key=''image'')
+      | unique }}'
+    loop_control:
+      loop_var: prefetch_image
+    name: Pre-fetch all the containers
+    register: result
+    retries: 5
+    until: result is succeeded
+  name: Force pre-fetch of container images
+  when:
+  - (step|int) == 5
+- block:
+  - failed_when: false
+    name: Disable tripleo-iptables.service
+    register: systemd_tripleo_iptables
+    systemd:
+      enabled: false
+      name: tripleo-iptables.service
+      state: stopped
+  - file:
+      path: /etc/systemd/system/tripleo-iptables.service
+      state: absent
+    name: Cleanup tripleo-iptables.services
+  - failed_when: false
+    name: Disable tripleo-ip6tables.service
+    register: systemd_tripleo_ip6tables
+    systemd:
+      enabled: false
+      name: tripleo-ip6tables.service
+      state: stopped
+  - file:
+      path: /etc/systemd/system/tripleo-ip6tables.service
+      state: absent
+    name: Cleanup tripleo-ip6tables.services
+  - name: Reload systemd
+    systemd:
+      daemon_reload: true
+    when:
+    - (systemd_tripleo_iptables is changed or systemd_tripleo_ip6tables is changed)
+  name: Cleanup tripleo-iptables services
+  when:
+  - (step | int) == 1
+- include_role:
+    name: tripleo_redhat_enforce
+  name: Enforce RHOSP rules regarding subscription.
+  vars:
+    skip_rhel_enforcement: false
+  when:
+  - step|int == 0
+  - ansible_facts['distribution'] == 'RedHat'
+  - not (skip_rhel_enforcement | bool)
+- loop: '{{ dnf_module_list|list }}'
+  name: Ensure DNF modules have the right stream enabled
+  tripleo_dnf_stream:
+    name: '{{ item.module }}:{{ item.stream }}'
+    state: enabled
+  vars:
+    dnf_module_list: []
+  when:
+  - step|int == 0
+  - dnf_module_list|length > 0
+  - item.distribution_version is defined
+  - ansible_facts['distribution_major_version'] is version(item.distribution_version,
+    '==')
+- name: Check for existing yum.pid
+  register: yum_pid_file
+  stat: path=/run/yum.pid
+  when: step|int == 0 or step|int == 3
+- fail: msg="ERROR existing yum.pid detected - can't continue! Please ensure there
+    is no other package update process for the duration of the minor update worfklow.
+    Exiting."
+  name: Exit if existing yum process
+  when: (step|int == 0 or step|int == 3) and yum_pid_file.stat.exists
+- name: Special treatment for OpenvSwitch
+  register: ovs_upgrade
+  tripleo_ovs_upgrade: null
+  when:
+  - step|int == 2
+- name: Always ensure the openvswitch service is enabled and running after upgrades
+  service:
+    enabled: true
+    name: openvswitch
+    state: started
+  when:
+  - step|int == 2
+  - ovs_upgrade.changed|bool
+- block:
+  - name: Update all packages
+    yum:
+      exclude: ansible-core
+      name: '*'
+      state: latest
+  - command: grub2-mkconfig -o /boot/grub2/grub.cfg
+    name: Generate grub config
+  - name: Find and replace grub.cfg
+    shell: 'set -o pipefail
+
+      find /boot/efi/EFI/ -name ''grub.cfg'' | xargs -i grub2-mkconfig -o {}
+
+      '
+  name: Update packages and grub
+  vars:
+    skip_package_update: false
+  when:
+  - step|int == 3
+  - not skip_package_update|bool
+- ignore_errors: true
+  name: Ensure openvswitch is running after update
+  service:
+    enabled: true
+    name: openvswitch
+    state: started
+  when: step|int == 3

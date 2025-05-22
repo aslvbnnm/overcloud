@@ -1,0 +1,432 @@
+- hosts: Undercloud
+  strategy: tripleo_free
+  name: External deployment step 1
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    bootstrap_server_id: fe09ce2f-4c93-4c9e-ad7a-54b84db1ef0c
+    step: '1'
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - name: External deployment step 1
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'External deployment step 1' to resume from this task
+    - include_tasks: "external_deploy_steps_tasks_step1.yaml"
+      when:
+        - playbook_dir ~ '/external_deploy_steps_tasks_step1.yaml' is exists
+  tags:
+    - external
+    - external_deploy_steps
+    - step1
+
+- hosts: Controller:overcloud
+  strategy: tripleo_free
+  name: Deploy step tasks for 1
+  become: true
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: fe09ce2f-4c93-4c9e-ad7a-54b84db1ef0c
+    step: '1'
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - name: Deploy step tasks for 1
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'Deploy step tasks for 1' to resume from this task
+    - name: Write the config_step hieradata for the deploy step 1 tasks
+
+      copy:
+        content: "{{ dict(step=step | int) | to_json }}"
+        dest: /etc/puppet/hieradata/config_step.json
+        force: true
+        mode: '0600'
+
+
+    - name: Overcloud common bootstrap tasks for step 1
+      block:
+        - name: "Check if /var/lib/tripleo-config/container-startup-config/step_1 already exists"
+          stat:
+            path: "/var/lib/tripleo-config/container-startup-config/step_1"
+          register: container_startup_configs_json_stat
+        - name: Write config data at the start of step 1
+          include_tasks: common_deploy_steps_tasks_step_1.yaml
+          when:
+            - ((deploy_identifier is defined and deploy_identifier != "" and deploy_identifier is not none) or
+              not container_startup_configs_json_stat.stat.exists)
+
+
+    - include_tasks: "{{ _task_file_path }}"
+      vars:
+        _task_file_path: "{{ tripleo_role_name }}/deploy_steps_tasks_step{{ step }}.yaml"
+      when: "'{{ playbook_dir }}/{{ _task_file_path }}' is exists"
+
+    - name: Overcloud common deploy step tasks 1
+      block:
+        - name: "Check if /var/lib/tripleo-config/container-startup-config/step_1 already exists"
+          stat:
+            path: "/var/lib/tripleo-config/container-startup-config/step_1"
+          register: container_startup_configs_json_stat
+        - include_tasks: common_deploy_steps_tasks.yaml
+          when: (deploy_identifier is defined and deploy_identifier != "" and deploy_identifier is not none) or
+                (container_startup_configs_json_stat is defined and not container_startup_configs_json_stat.stat.exists)
+  tags:
+    - overcloud
+    - deploy_steps
+    - step1
+- hosts: Undercloud
+  strategy: tripleo_free
+  name: External deployment step 2
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    bootstrap_server_id: fe09ce2f-4c93-4c9e-ad7a-54b84db1ef0c
+    step: '2'
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - name: External deployment step 2
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'External deployment step 2' to resume from this task
+    - include_tasks: "external_deploy_steps_tasks_step2.yaml"
+      when:
+        - playbook_dir ~ '/external_deploy_steps_tasks_step2.yaml' is exists
+  tags:
+    - external
+    - external_deploy_steps
+    - step2
+
+- hosts: Controller:overcloud
+  strategy: tripleo_free
+  name: Deploy step tasks for 2
+  become: true
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: fe09ce2f-4c93-4c9e-ad7a-54b84db1ef0c
+    step: '2'
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - name: Deploy step tasks for 2
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'Deploy step tasks for 2' to resume from this task
+    - name: Write the config_step hieradata for the deploy step 2 tasks
+
+      copy:
+        content: "{{ dict(step=step | int) | to_json }}"
+        dest: /etc/puppet/hieradata/config_step.json
+        force: true
+        mode: '0600'
+
+
+
+    - include_tasks: "{{ _task_file_path }}"
+      vars:
+        _task_file_path: "{{ tripleo_role_name }}/deploy_steps_tasks_step{{ step }}.yaml"
+      when: "'{{ playbook_dir }}/{{ _task_file_path }}' is exists"
+
+    - name: Overcloud common deploy step tasks 2
+      block:
+        - name: "Check if /var/lib/tripleo-config/container-startup-config/step_2 already exists"
+          stat:
+            path: "/var/lib/tripleo-config/container-startup-config/step_2"
+          register: container_startup_configs_json_stat
+        - include_tasks: common_deploy_steps_tasks.yaml
+          when: (deploy_identifier is defined and deploy_identifier != "" and deploy_identifier is not none) or
+                (container_startup_configs_json_stat is defined and not container_startup_configs_json_stat.stat.exists)
+  tags:
+    - overcloud
+    - deploy_steps
+    - step2
+- hosts: Undercloud
+  strategy: tripleo_free
+  name: External deployment step 3
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    bootstrap_server_id: fe09ce2f-4c93-4c9e-ad7a-54b84db1ef0c
+    step: '3'
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - name: External deployment step 3
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'External deployment step 3' to resume from this task
+    - include_tasks: "external_deploy_steps_tasks_step3.yaml"
+      when:
+        - playbook_dir ~ '/external_deploy_steps_tasks_step3.yaml' is exists
+  tags:
+    - external
+    - external_deploy_steps
+    - step3
+
+- hosts: Controller:overcloud
+  strategy: tripleo_free
+  name: Deploy step tasks for 3
+  become: true
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: fe09ce2f-4c93-4c9e-ad7a-54b84db1ef0c
+    step: '3'
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - name: Deploy step tasks for 3
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'Deploy step tasks for 3' to resume from this task
+    - name: Write the config_step hieradata for the deploy step 3 tasks
+
+      copy:
+        content: "{{ dict(step=step | int) | to_json }}"
+        dest: /etc/puppet/hieradata/config_step.json
+        force: true
+        mode: '0600'
+
+
+
+    - include_tasks: "{{ _task_file_path }}"
+      vars:
+        _task_file_path: "{{ tripleo_role_name }}/deploy_steps_tasks_step{{ step }}.yaml"
+      when: "'{{ playbook_dir }}/{{ _task_file_path }}' is exists"
+
+    - name: Overcloud common deploy step tasks 3
+      block:
+        - name: "Check if /var/lib/tripleo-config/container-startup-config/step_3 already exists"
+          stat:
+            path: "/var/lib/tripleo-config/container-startup-config/step_3"
+          register: container_startup_configs_json_stat
+        - include_tasks: common_deploy_steps_tasks.yaml
+          when: (deploy_identifier is defined and deploy_identifier != "" and deploy_identifier is not none) or
+                (container_startup_configs_json_stat is defined and not container_startup_configs_json_stat.stat.exists)
+  tags:
+    - overcloud
+    - deploy_steps
+    - step3
+- hosts: Undercloud
+  strategy: tripleo_free
+  name: External deployment step 4
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    bootstrap_server_id: fe09ce2f-4c93-4c9e-ad7a-54b84db1ef0c
+    step: '4'
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - name: External deployment step 4
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'External deployment step 4' to resume from this task
+    - include_tasks: "external_deploy_steps_tasks_step4.yaml"
+      when:
+        - playbook_dir ~ '/external_deploy_steps_tasks_step4.yaml' is exists
+  tags:
+    - external
+    - external_deploy_steps
+    - step4
+
+- hosts: Controller:overcloud
+  strategy: tripleo_free
+  name: Deploy step tasks for 4
+  become: true
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: fe09ce2f-4c93-4c9e-ad7a-54b84db1ef0c
+    step: '4'
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - name: Deploy step tasks for 4
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'Deploy step tasks for 4' to resume from this task
+    - name: Write the config_step hieradata for the deploy step 4 tasks
+
+      copy:
+        content: "{{ dict(step=step | int) | to_json }}"
+        dest: /etc/puppet/hieradata/config_step.json
+        force: true
+        mode: '0600'
+
+
+
+    - include_tasks: "{{ _task_file_path }}"
+      vars:
+        _task_file_path: "{{ tripleo_role_name }}/deploy_steps_tasks_step{{ step }}.yaml"
+      when: "'{{ playbook_dir }}/{{ _task_file_path }}' is exists"
+
+    - name: Overcloud common deploy step tasks 4
+      block:
+        - name: "Check if /var/lib/tripleo-config/container-startup-config/step_4 already exists"
+          stat:
+            path: "/var/lib/tripleo-config/container-startup-config/step_4"
+          register: container_startup_configs_json_stat
+        - include_tasks: common_deploy_steps_tasks.yaml
+          when: (deploy_identifier is defined and deploy_identifier != "" and deploy_identifier is not none) or
+                (container_startup_configs_json_stat is defined and not container_startup_configs_json_stat.stat.exists)
+  tags:
+    - overcloud
+    - deploy_steps
+    - step4
+- hosts: Undercloud
+  strategy: tripleo_free
+  name: External deployment step 5
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    bootstrap_server_id: fe09ce2f-4c93-4c9e-ad7a-54b84db1ef0c
+    step: '5'
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - name: External deployment step 5
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'External deployment step 5' to resume from this task
+    - include_tasks: "external_deploy_steps_tasks_step5.yaml"
+      when:
+        - playbook_dir ~ '/external_deploy_steps_tasks_step5.yaml' is exists
+  tags:
+    - external
+    - external_deploy_steps
+    - step5
+
+- hosts: Controller:overcloud
+  strategy: tripleo_free
+  name: Deploy step tasks for 5
+  become: true
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: fe09ce2f-4c93-4c9e-ad7a-54b84db1ef0c
+    step: '5'
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - name: Deploy step tasks for 5
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'Deploy step tasks for 5' to resume from this task
+    - name: Write the config_step hieradata for the deploy step 5 tasks
+
+      copy:
+        content: "{{ dict(step=step | int) | to_json }}"
+        dest: /etc/puppet/hieradata/config_step.json
+        force: true
+        mode: '0600'
+
+
+
+    - include_tasks: "{{ _task_file_path }}"
+      vars:
+        _task_file_path: "{{ tripleo_role_name }}/deploy_steps_tasks_step{{ step }}.yaml"
+      when: "'{{ playbook_dir }}/{{ _task_file_path }}' is exists"
+
+    - name: Overcloud common deploy step tasks 5
+      block:
+        - name: "Check if /var/lib/tripleo-config/container-startup-config/step_5 already exists"
+          stat:
+            path: "/var/lib/tripleo-config/container-startup-config/step_5"
+          register: container_startup_configs_json_stat
+        - include_tasks: common_deploy_steps_tasks.yaml
+          when: (deploy_identifier is defined and deploy_identifier != "" and deploy_identifier is not none) or
+                (container_startup_configs_json_stat is defined and not container_startup_configs_json_stat.stat.exists)
+  tags:
+    - overcloud
+    - deploy_steps
+    - step5

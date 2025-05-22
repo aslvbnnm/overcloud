@@ -1,0 +1,45 @@
+---
+{% set mtu_list = [ctlplane_mtu] %}
+{% for network in role_networks %}
+{{ mtu_list.append(lookup('vars', networks_lower[network] ~ '_mtu')) }}
+{%- endfor %}
+{% set min_viable_mtu = mtu_list | max %}
+network_config:
+- type: ovs_bridge
+  name: br-osp
+  members:
+  - type: interface
+    name: eno12409
+    mtu: 1500
+    use_dhcp: false
+    primary: true
+{% for network in networks_all if network not in networks_skip_config|default([]) %}
+{% if network not in ["External"] and network in role_networks %}
+  - type: vlan
+    mtu: 1400
+    use_dhcp: false
+    vlan_id: 3801
+    addresses:
+    - ip_netmask: {{ ctlplane_ip }}/{{ ctlplane_subnet_cidr }}
+    routes: []
+  - type: vlan
+    mtu: {{ lookup('vars', networks_lower[network] ~ '_mtu') }}
+    vlan_id: {{ lookup('vars', networks_lower[network] ~ '_vlan_id') }}
+    addresses:
+    - ip_netmask:
+        {{ lookup('vars', networks_lower[network] ~ '_ip') }}/{{ lookup('vars', networks_lower[network] ~ '_cidr') }}
+    routes: {{ lookup('vars', networks_lower[network] ~ '_host_routes') | flatten | unique }}
+{% endif %}
+{% endfor %}
+- type: ovs_bridge
+  name: br-ex
+  dns_servers: 192.168.131.20
+  domain: turbo.lab.test
+  use_dhcp: true
+  mtu: 1500
+  members:
+  - type: interface
+    name: eno12399
+    mtu: 1500
+    use_dhcp: false
+    primary: true

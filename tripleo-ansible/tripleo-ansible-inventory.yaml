@@ -1,0 +1,660 @@
+Undercloud:
+  hosts:
+    undercloud: {}
+  vars:
+    ansible_connection: local
+    ansible_host: localhost
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_remote_tmp: /tmp/ansible-${USER}
+    any_error_fatal: true
+    auth_url: null
+    max_fail_percentage: 0
+    overcloud_admin_password: h5fxn4fxfqsszsmn9hlsb4ztd
+    overcloud_horizon_url: http://192.168.131.60:80/dashboard
+    overcloud_keystone_url: http://192.168.131.60:5000
+    plan: overcloud
+    plans:
+    - overcloud
+    project_name: null
+    undercloud_service_list:
+    - tripleo_ironic_conductor
+    username: null
+Controller:
+  children:
+    overcloud_Controller: {}
+overcloud_Controller:
+  hosts:
+    controller-0:
+      ansible_host: 172.16.1.12
+      canonical_hostname: controller-0.turbo.lab.test
+      ctlplane_hostname: controller-0.ctlplane.turbo.lab.test
+      ctlplane_ip: 172.16.1.12
+      deploy_server_id: fe09ce2f-4c93-4c9e-ad7a-54b84db1ef0c
+      external_hostname: controller-0.external.turbo.lab.test
+      external_ip: 192.168.131.62
+      internal_api_hostname: controller-0.internalapi.turbo.lab.test
+      internal_api_ip: 172.16.2.14
+      storage_hostname: controller-0.storage.turbo.lab.test
+      storage_ip: 172.16.4.11
+      storage_mgmt_hostname: controller-0.storagemgmt.turbo.lab.test
+      storage_mgmt_ip: 172.16.5.10
+      tenant_hostname: controller-0.tenant.turbo.lab.test
+      tenant_ip: 172.16.3.10
+    controller-1:
+      ansible_host: 172.16.1.13
+      canonical_hostname: controller-1.turbo.lab.test
+      ctlplane_hostname: controller-1.ctlplane.turbo.lab.test
+      ctlplane_ip: 172.16.1.13
+      deploy_server_id: a5dc076e-6f22-45e8-8a46-c15055aabfc7
+      external_hostname: controller-1.external.turbo.lab.test
+      external_ip: 192.168.131.63
+      internal_api_hostname: controller-1.internalapi.turbo.lab.test
+      internal_api_ip: 172.16.2.15
+      storage_hostname: controller-1.storage.turbo.lab.test
+      storage_ip: 172.16.4.12
+      storage_mgmt_hostname: controller-1.storagemgmt.turbo.lab.test
+      storage_mgmt_ip: 172.16.5.12
+      tenant_hostname: controller-1.tenant.turbo.lab.test
+      tenant_ip: 172.16.3.11
+    controller-2:
+      ansible_host: 172.16.1.14
+      canonical_hostname: controller-2.turbo.lab.test
+      ctlplane_hostname: controller-2.ctlplane.turbo.lab.test
+      ctlplane_ip: 172.16.1.14
+      deploy_server_id: 4393afe5-c157-4cf6-b24e-635882132bdb
+      external_hostname: controller-2.external.turbo.lab.test
+      external_ip: 192.168.131.64
+      internal_api_hostname: controller-2.internalapi.turbo.lab.test
+      internal_api_ip: 172.16.2.16
+      storage_hostname: controller-2.storage.turbo.lab.test
+      storage_ip: 172.16.4.13
+      storage_mgmt_hostname: controller-2.storagemgmt.turbo.lab.test
+      storage_mgmt_ip: 172.16.5.13
+      tenant_hostname: controller-2.tenant.turbo.lab.test
+      tenant_ip: 172.16.3.12
+  vars:
+    ansible_ssh_user: cloud-admin
+    bootstrap_server_id: fe09ce2f-4c93-4c9e-ad7a-54b84db1ef0c
+    serial: 1
+    tripleo_role_name: Controller
+    tripleo_role_networks:
+    - ctlplane
+    - external
+    - internal_api
+    - storage
+    - storage_mgmt
+    - tenant
+ComputeHCI:
+  children:
+    overcloud_ComputeHCI: {}
+overcloud_ComputeHCI:
+  hosts:
+    computehci-0:
+      ansible_host: 172.16.1.15
+      canonical_hostname: computehci-0.turbo.lab.test
+      ctlplane_hostname: computehci-0.ctlplane.turbo.lab.test
+      ctlplane_ip: 172.16.1.15
+      deploy_server_id: 09297653-caa7-4b37-8d7f-4d6e6aebb580
+      internal_api_hostname: computehci-0.internalapi.turbo.lab.test
+      internal_api_ip: 172.16.2.17
+      storage_hostname: computehci-0.storage.turbo.lab.test
+      storage_ip: 172.16.4.14
+      storage_mgmt_hostname: computehci-0.storagemgmt.turbo.lab.test
+      storage_mgmt_ip: 172.16.5.14
+      tenant_hostname: computehci-0.tenant.turbo.lab.test
+      tenant_ip: 172.16.3.13
+    computehci-1:
+      ansible_host: 172.16.1.16
+      canonical_hostname: computehci-1.turbo.lab.test
+      ctlplane_hostname: computehci-1.ctlplane.turbo.lab.test
+      ctlplane_ip: 172.16.1.16
+      deploy_server_id: e9c48dbf-5d66-417f-9ef0-1d6b43ed3f80
+      internal_api_hostname: computehci-1.internalapi.turbo.lab.test
+      internal_api_ip: 172.16.2.18
+      storage_hostname: computehci-1.storage.turbo.lab.test
+      storage_ip: 172.16.4.15
+      storage_mgmt_hostname: computehci-1.storagemgmt.turbo.lab.test
+      storage_mgmt_ip: 172.16.5.15
+      tenant_hostname: computehci-1.tenant.turbo.lab.test
+      tenant_ip: 172.16.3.14
+  vars:
+    ansible_ssh_user: cloud-admin
+    bootstrap_server_id: fe09ce2f-4c93-4c9e-ad7a-54b84db1ef0c
+    serial: 1
+    tripleo_role_name: ComputeHCI
+    tripleo_role_networks:
+    - ctlplane
+    - internal_api
+    - storage
+    - storage_mgmt
+    - tenant
+overcloud_overcloud:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    container_cli: podman
+    ctlplane_vip: 172.16.1.10
+    external_vip: 192.168.131.60
+    internal_api_vip: 172.16.2.10
+    storage_mgmt_vip: 172.16.5.11
+    storage_vip: 172.16.4.10
+allovercloud:
+  children:
+    overcloud_allovercloud: {}
+overcloud_allovercloud:
+  children:
+    overcloud_overcloud: {}
+overcloud:
+  children:
+    overcloud_allovercloud: {}
+ca_certs:
+  children:
+    overcloud_ca_certs: {}
+overcloud_ca_certs:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+timezone:
+  children:
+    overcloud_timezone: {}
+overcloud_timezone:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+nova_metadata:
+  children:
+    overcloud_nova_metadata: {}
+overcloud_nova_metadata:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+horizon:
+  children:
+    overcloud_horizon: {}
+overcloud_horizon:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+cinder_api:
+  children:
+    overcloud_cinder_api: {}
+overcloud_cinder_api:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+logrotate_crond:
+  children:
+    overcloud_logrotate_crond: {}
+overcloud_logrotate_crond:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+swift_storage:
+  children:
+    overcloud_swift_storage: {}
+overcloud_swift_storage:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+ceph_mgr:
+  children:
+    overcloud_ceph_mgr: {}
+overcloud_ceph_mgr:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+pacemaker:
+  children:
+    overcloud_pacemaker: {}
+overcloud_pacemaker:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+keystone:
+  children:
+    overcloud_keystone: {}
+overcloud_keystone:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+oslo_messaging_notify:
+  children:
+    overcloud_oslo_messaging_notify: {}
+overcloud_oslo_messaging_notify:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+ovn_metadata:
+  children:
+    overcloud_ovn_metadata: {}
+overcloud_ovn_metadata:
+  children:
+    overcloud_ComputeHCI: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+ovn_controller:
+  children:
+    overcloud_ovn_controller: {}
+overcloud_ovn_controller:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+neutron_plugin_ml2_ovn:
+  children:
+    overcloud_neutron_plugin_ml2_ovn: {}
+overcloud_neutron_plugin_ml2_ovn:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+cinder_volume:
+  children:
+    overcloud_cinder_volume: {}
+overcloud_cinder_volume:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+ceph_osd:
+  children:
+    overcloud_ceph_osd: {}
+overcloud_ceph_osd:
+  children:
+    overcloud_ComputeHCI: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+tuned:
+  children:
+    overcloud_tuned: {}
+overcloud_tuned:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+ceph_mon:
+  children:
+    overcloud_ceph_mon: {}
+overcloud_ceph_mon:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+heat_engine:
+  children:
+    overcloud_heat_engine: {}
+overcloud_heat_engine:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+nova_api:
+  children:
+    overcloud_nova_api: {}
+overcloud_nova_api:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+mysql:
+  children:
+    overcloud_mysql: {}
+overcloud_mysql:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+glance_api_internal:
+  children:
+    overcloud_glance_api_internal: {}
+overcloud_glance_api_internal:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+sshd:
+  children:
+    overcloud_sshd: {}
+overcloud_sshd:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+clustercheck:
+  children:
+    overcloud_clustercheck: {}
+overcloud_clustercheck:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+tripleo_firewall:
+  children:
+    overcloud_tripleo_firewall: {}
+overcloud_tripleo_firewall:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+kernel:
+  children:
+    overcloud_kernel: {}
+overcloud_kernel:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+nova_libvirt_guests:
+  children:
+    overcloud_nova_libvirt_guests: {}
+overcloud_nova_libvirt_guests:
+  children:
+    overcloud_ComputeHCI: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+cinder_scheduler:
+  children:
+    overcloud_cinder_scheduler: {}
+overcloud_cinder_scheduler:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+keystone_admin_api:
+  children:
+    overcloud_keystone_admin_api: {}
+overcloud_keystone_admin_api:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+glance_api:
+  children:
+    overcloud_glance_api: {}
+overcloud_glance_api:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+nova_scheduler:
+  children:
+    overcloud_nova_scheduler: {}
+overcloud_nova_scheduler:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+podman:
+  children:
+    overcloud_podman: {}
+overcloud_podman:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+heat_api_cloudwatch_disabled:
+  children:
+    overcloud_heat_api_cloudwatch_disabled: {}
+overcloud_heat_api_cloudwatch_disabled:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+ceph_client:
+  children:
+    overcloud_ceph_client: {}
+overcloud_ceph_client:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+heat_api_cfn:
+  children:
+    overcloud_heat_api_cfn: {}
+overcloud_heat_api_cfn:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+nova_migration_target:
+  children:
+    overcloud_nova_migration_target: {}
+overcloud_nova_migration_target:
+  children:
+    overcloud_ComputeHCI: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+iscsid:
+  children:
+    overcloud_iscsid: {}
+overcloud_iscsid:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+neutron_api:
+  children:
+    overcloud_neutron_api: {}
+overcloud_neutron_api:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+haproxy:
+  children:
+    overcloud_haproxy: {}
+overcloud_haproxy:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+nova_vnc_proxy:
+  children:
+    overcloud_nova_vnc_proxy: {}
+overcloud_nova_vnc_proxy:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+container_image_prepare:
+  children:
+    overcloud_container_image_prepare: {}
+overcloud_container_image_prepare:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+tripleo_packages:
+  children:
+    overcloud_tripleo_packages: {}
+overcloud_tripleo_packages:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+mysql_client:
+  children:
+    overcloud_mysql_client: {}
+overcloud_mysql_client:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+swift_proxy:
+  children:
+    overcloud_swift_proxy: {}
+overcloud_swift_proxy:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+placement:
+  children:
+    overcloud_placement: {}
+overcloud_placement:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+heat_api:
+  children:
+    overcloud_heat_api: {}
+overcloud_heat_api:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+chrony:
+  children:
+    overcloud_chrony: {}
+overcloud_chrony:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+nova_conductor:
+  children:
+    overcloud_nova_conductor: {}
+overcloud_nova_conductor:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+keystone_public_api:
+  children:
+    overcloud_keystone_public_api: {}
+overcloud_keystone_public_api:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+oslo_messaging_rpc:
+  children:
+    overcloud_oslo_messaging_rpc: {}
+overcloud_oslo_messaging_rpc:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+ovn_dbs:
+  children:
+    overcloud_ovn_dbs: {}
+overcloud_ovn_dbs:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+nova_compute:
+  children:
+    overcloud_nova_compute: {}
+overcloud_nova_compute:
+  children:
+    overcloud_ComputeHCI: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+nova_libvirt:
+  children:
+    overcloud_nova_libvirt: {}
+overcloud_nova_libvirt:
+  children:
+    overcloud_ComputeHCI: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+memcached:
+  children:
+    overcloud_memcached: {}
+overcloud_memcached:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+swift_ringbuilder:
+  children:
+    overcloud_swift_ringbuilder: {}
+overcloud_swift_ringbuilder:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+boot_params_service:
+  children:
+    overcloud_boot_params_service: {}
+overcloud_boot_params_service:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+snmp:
+  children:
+    overcloud_snmp: {}
+overcloud_snmp:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+mgrs:
+  children:
+    overcloud_mgrs: {}
+overcloud_mgrs:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+osds:
+  children:
+    overcloud_osds: {}
+overcloud_osds:
+  children:
+    overcloud_ComputeHCI: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+mons:
+  children:
+    overcloud_mons: {}
+overcloud_mons:
+  children:
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+clients:
+  children:
+    overcloud_clients: {}
+overcloud_clients:
+  children:
+    overcloud_ComputeHCI: {}
+    overcloud_Controller: {}
+  vars:
+    ansible_ssh_user: cloud-admin
+excluded_overcloud:
+  children:
+    overcloud_excluded_overcloud: {}
+overcloud_excluded_overcloud:
+  hosts: {}

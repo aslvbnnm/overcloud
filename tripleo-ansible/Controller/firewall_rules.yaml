@@ -1,0 +1,133 @@
+003 accept ssh from all:
+  dport: 22
+  extras:
+    ensure: absent
+  proto: tcp
+003 accept ssh from ctlplane subnet 172.16.1.0/24:
+  dport: 22
+  proto: tcp
+  source: 172.16.1.0/24
+104 mysql galera-bundle:
+  dport:
+  - 873
+  - 3123
+  - 3306
+  - 4444
+  - 4567
+  - 4568
+  - 9200
+105 ntp:
+  dport: 123
+  proto: udp
+107 haproxy stats:
+  dport: 1993
+109 rabbitmq-bundle:
+  dport:
+  - 3122
+  - 4369
+  - 5672
+  - 25672
+  - 25673-25683
+110 ceph_mon:
+  dport:
+  - 6789
+  - 3300
+111 keystone:
+  dport:
+  - 5000
+  - '35357'
+112 glance_api:
+  dport:
+  - 9292
+112 glance_api_internal:
+  dport:
+  - '9293'
+113 ceph_mgr:
+  dport:
+  - 6800-7300
+113 nova_api:
+  dport:
+  - 8774
+114 neutron api:
+  dport:
+  - 9696
+118 neutron vxlan networks:
+  dport: 4789
+  proto: udp
+119 cinder:
+  dport:
+  - 8776
+119 neutron geneve networks:
+  dport: 6081
+  proto: udp
+120 iscsi initiator:
+  dport: 3260
+120 neutron geneve networks no conntrack:
+  action: append
+  chain: OUTPUT
+  dport: 6081
+  jump: NOTRACK
+  proto: udp
+  state: []
+  table: raw
+121 OVN DB server and cluster ports for 172.16.2.0/24:
+  dport:
+  - 6641
+  - 6642
+  - 6643
+  - 6644
+  proto: tcp
+  source: 172.16.2.0/24
+121 memcached 172.16.2.0/24:
+  dport:
+  - 11211
+  proto: tcp
+  source: 172.16.2.0/24
+121 neutron geneve networks no conntrack:
+  action: append
+  chain: PREROUTING
+  dport: 6081
+  jump: NOTRACK
+  proto: udp
+  state: []
+  table: raw
+122 swift proxy:
+  dport:
+  - 8080
+123 swift storage:
+  dport:
+  - 873
+  - 6000
+  - 6001
+  - 6002
+124 snmp 172.16.1.0/24:
+  dport: 161
+  proto: udp
+  source: 172.16.1.0/24
+125 heat_api:
+  dport:
+  - 8004
+125 heat_cfn:
+  dport:
+  - 8000
+126 horizon:
+  dport:
+  - 80
+130 pacemaker tcp:
+  dport:
+  - 2224
+  - 3121
+  - 21064
+  proto: tcp
+131 pacemaker udp:
+  dport: 5405
+  proto: udp
+137 nova_vnc_proxy:
+  dport:
+  - 6080
+138 placement:
+  dport:
+  - 8778
+139 nova_metadata:
+  dport:
+  - 8775

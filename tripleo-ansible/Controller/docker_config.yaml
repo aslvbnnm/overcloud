@@ -1,0 +1,1750 @@
+step_0:
+  ovn_cluster_north_db_server:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-ovn-nb-db-server:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    start_order: 0
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/ovn_cluster_north_db_server.json:/var/lib/kolla/config_files/config.json:ro
+    - /lib/modules:/lib/modules:ro
+    - /var/lib/openvswitch/ovn:/var/lib/openvswitch:shared,z
+    - /var/lib/openvswitch/ovn:/run/openvswitch:shared,z
+    - /var/log/containers/openvswitch:/var/log/openvswitch:z
+    - /var/lib/openvswitch/ovn:/var/lib/ovn:shared,z
+    - /var/lib/openvswitch/ovn:/etc/openvswitch:shared,z
+    - /var/lib/openvswitch/ovn:/etc/ovn:shared,z
+    - /var/lib/openvswitch/ovn:/run/ovn:shared,z
+    - /var/log/containers/openvswitch:/var/log/ovn:z
+    - /var/lib/config-data/ansible-generated/ovn:/var/lib/kolla/config_files/src:ro
+  ovn_cluster_northd:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-ovn-northd:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    start_order: 2
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/ovn_cluster_northd.json:/var/lib/kolla/config_files/config.json:ro
+    - /lib/modules:/lib/modules:ro
+    - /var/lib/openvswitch/ovn:/run/openvswitch:shared,z
+    - /var/log/containers/openvswitch:/var/log/openvswitch:z
+    - /var/lib/openvswitch/ovn:/run/ovn:shared,z
+    - /var/log/containers/openvswitch:/var/log/ovn:z
+    - /var/lib/config-data/ansible-generated/ovn:/var/lib/kolla/config_files/src:ro
+  ovn_cluster_south_db_server:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-ovn-sb-db-server:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    start_order: 0
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/ovn_cluster_south_db_server.json:/var/lib/kolla/config_files/config.json:ro
+    - /lib/modules:/lib/modules:ro
+    - /var/lib/openvswitch/ovn:/var/lib/openvswitch:shared,z
+    - /var/lib/openvswitch/ovn:/run/openvswitch:shared,z
+    - /var/log/containers/openvswitch:/var/log/openvswitch:z
+    - /var/lib/openvswitch/ovn:/var/lib/ovn:shared,z
+    - /var/lib/openvswitch/ovn:/etc/openvswitch:shared,z
+    - /var/lib/openvswitch/ovn:/etc/ovn:shared,z
+    - /var/lib/openvswitch/ovn:/run/ovn:shared,z
+    - /var/log/containers/openvswitch:/var/log/ovn:z
+    - /var/lib/config-data/ansible-generated/ovn:/var/lib/kolla/config_files/src:ro
+step_1:
+  memcached:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-memcached:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    start_order: 0
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/memcached.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/memcached:/var/lib/kolla/config_files/src:rw,z
+    - /var/log/containers/memcached:/var/log/memcached:rw
+  mysql_bootstrap:
+    command:
+    - bash
+    - -ec
+    - 'if [ -e /var/lib/mysql/mysql ]; then exit 0; fi
+
+      echo -e "\n[mysqld]\nwsrep_provider=none" >> /etc/my.cnf
+
+      kolla_set_configs
+
+      sudo -u mysql -E kolla_extend_start
+
+      timeout ${DB_MAX_TIMEOUT} /bin/bash -c ''while pgrep -af /usr/bin/mysqld_safe
+      | grep -q -v grep; do sleep 1; done''
+
+      mysqld_safe --skip-networking --wsrep-on=OFF &
+
+      timeout ${DB_MAX_TIMEOUT} /bin/bash -c ''until mysqladmin -uroot -p"${DB_ROOT_PASSWORD}"
+      ping 2>/dev/null; do sleep 1; done''
+
+      mysql -uroot -p"${DB_ROOT_PASSWORD}" -e "CREATE USER ''clustercheck''@''localhost''
+      IDENTIFIED BY ''${DB_CLUSTERCHECK_PASSWORD}'';"
+
+      mysql -uroot -p"${DB_ROOT_PASSWORD}" -e "GRANT PROCESS ON *.* TO ''clustercheck''@''localhost''
+      WITH GRANT OPTION;"
+
+      mysql -uroot -p"${DB_ROOT_PASSWORD}" -e "DELETE FROM mysql.user WHERE user =
+      ''root'' AND host NOT IN (''%'',''localhost'');"
+
+      timeout ${DB_MAX_TIMEOUT} mysqladmin -uroot -p"${DB_ROOT_PASSWORD}" shutdown'
+    detach: false
+    environment:
+      DB_CLUSTERCHECK_PASSWORD: 64hvdgn2xxhtg4zkhv5hl2cc5
+      DB_MARIABACKUP_PASSWORD: smrg5j5wdmmm6d6vh48sl7dcz
+      DB_MARIABACKUP_USER: mariabackup
+      DB_MAX_TIMEOUT: 60
+      DB_ROOT_PASSWORD: hgljr2vczh
+      KOLLA_BOOTSTRAP: true
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-mariadb:17.1.6
+    net: host
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/mysql.json:/var/lib/kolla/config_files/config.json:rw,z
+    - /var/lib/config-data/puppet-generated/mysql:/var/lib/kolla/config_files/src:ro,z
+    - /var/lib/mysql:/var/lib/mysql:rw,z
+  mysql_data_ownership:
+    command:
+    - chown
+    - -R
+    - 'mysql:'
+    - /var/lib/mysql
+    detach: false
+    image: registry.redhat.io/rhosp-rhel9/openstack-mariadb:17.1.6
+    net: host
+    start_order: 0
+    user: root
+    volumes:
+    - /var/lib/mysql:/var/lib/mysql:z
+  rabbitmq_bootstrap:
+    environment:
+      KOLLA_BOOTSTRAP: true
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      RABBITMQ_CLUSTER_COOKIE: 4wfxd7r54z7dqdvtfw7v
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-rabbitmq:17.1.6
+    net: host
+    privileged: false
+    start_order: 0
+    volumes:
+    - /var/lib/kolla/config_files/rabbitmq.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/rabbitmq:/var/lib/kolla/config_files/src:ro
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /var/lib/rabbitmq:/var/lib/rabbitmq:z
+step_2:
+  cinder_api_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R cinder:cinder /var/log/cinder
+    image: registry.redhat.io/rhosp-rhel9/openstack-cinder-api:17.1.6
+    net: none
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/cinder:/var/log/cinder:z
+    - /var/log/containers/httpd/cinder-api:/var/log/httpd:z
+  cinder_scheduler_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R cinder:cinder /var/log/cinder
+    image: registry.redhat.io/rhosp-rhel9/openstack-cinder-scheduler:17.1.6
+    net: none
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/cinder:/var/log/cinder:z
+  clustercheck:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-mariadb:17.1.6
+    net: host
+    restart: always
+    start_order: 1
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/clustercheck.json:/var/lib/kolla/config_files/config.json
+    - /var/lib/config-data/puppet-generated/clustercheck:/var/lib/kolla/config_files/src:ro
+    - /var/lib/mysql:/var/lib/mysql
+  glance_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R glance:glance /var/log/glance
+    image: registry.redhat.io/rhosp-rhel9/openstack-glance-api:17.1.6
+    net: none
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/glance:/var/log/glance:z
+    - /var/log/containers/httpd/glance:/var/log/httpd:z
+  heat_init_log:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R heat:heat /var/log/heat
+    image: registry.redhat.io/rhosp-rhel9/openstack-heat-engine:17.1.6
+    net: none
+    user: root
+    volumes:
+    - /var/log/containers/heat:/var/log/heat:z
+  horizon_fix_perms:
+    command:
+    - /bin/bash
+    - -c
+    - touch /var/log/horizon/horizon.log ; chown -R apache:apache /var/log/horizon
+      && chmod -R a+rx /etc/openstack-dashboard
+    image: registry.redhat.io/rhosp-rhel9/openstack-horizon:17.1.6
+    net: none
+    user: root
+    volumes:
+    - /var/log/containers/horizon:/var/log/horizon:z
+    - /var/log/containers/httpd/horizon:/var/log/httpd:z
+    - /var/lib/config-data/puppet-generated/horizon/etc/openstack-dashboard:/etc/openstack-dashboard
+  keystone_init_log:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R keystone:keystone /var/log/keystone
+    image: registry.redhat.io/rhosp-rhel9/openstack-keystone:17.1.6
+    net: none
+    start_order: 1
+    user: root
+    volumes:
+    - /var/log/containers/keystone:/var/log/keystone:z
+    - /var/log/containers/httpd/keystone:/var/log/httpd:z
+  mysql_wait_bundle:
+    command:
+    - /container_puppet_apply.sh
+    - '2'
+    - file,file_line,concat,augeas,galera_ready,mysql_database,mysql_grant,mysql_user
+    - include tripleo::profile::pacemaker::database::mysql_bundle
+    detach: false
+    environment:
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-mariadb:17.1.6
+    ipc: host
+    net: host
+    start_order: 0
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /var/lib/container-config-scripts/container_puppet_apply.sh:/container_puppet_apply.sh:ro
+    - /etc/puppet:/tmp/puppet-etc:ro
+    - /usr/share/openstack-puppet/modules:/usr/share/openstack-puppet/modules:ro
+    - /var/lib/mysql:/var/lib/mysql:rw,z
+    - /var/lib/config-data/puppet-generated/mysql/root:/root:rw
+  neutron_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R neutron:neutron /var/log/neutron
+    image: registry.redhat.io/rhosp-rhel9/openstack-neutron-server:17.1.6
+    net: none
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/neutron:/var/log/neutron:z
+    - /var/log/containers/httpd/neutron-api:/var/log/httpd:z
+  nova_api_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R nova:nova /var/log/nova
+    environment:
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-api:17.1.6
+    net: none
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/nova:/var/log/nova:z
+    - /var/log/containers/httpd/nova-api:/var/log/httpd:z
+  nova_conductor_init_log:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R nova:nova /var/log/nova
+    environment:
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-conductor:17.1.6
+    net: none
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/nova:/var/log/nova:z
+  nova_metadata_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R nova:nova /var/log/nova
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-api:17.1.6
+    net: none
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/nova:/var/log/nova:z
+    - /var/log/containers/httpd/nova-metadata:/var/log/httpd:z
+  placement_init_log:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R placement:placement /var/log/placement
+    image: registry.redhat.io/rhosp-rhel9/openstack-placement-api:17.1.6
+    net: none
+    start_order: 1
+    user: root
+    volumes:
+    - /var/log/containers/placement:/var/log/placement:z
+    - /var/log/containers/httpd/placement:/var/log/httpd:z
+  rabbitmq_wait_bundle:
+    command:
+    - /container_puppet_apply.sh
+    - '2'
+    - file,file_line,concat,augeas,rabbitmq_policy,rabbitmq_user,rabbitmq_ready
+    - include tripleo::profile::pacemaker::rabbitmq_bundle
+    - ''
+    detach: false
+    environment:
+      KOLLA_BOOTSTRAP: true
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      RABBITMQ_CLUSTER_COOKIE: 4wfxd7r54z7dqdvtfw7v
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-rabbitmq:17.1.6
+    ipc: host
+    net: host
+    start_order: 0
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /var/lib/container-config-scripts/container_puppet_apply.sh:/container_puppet_apply.sh:ro
+    - /etc/puppet:/tmp/puppet-etc:ro
+    - /usr/share/openstack-puppet/modules:/usr/share/openstack-puppet/modules:ro
+    - /bin/true:/bin/epmd
+step_3:
+  cinder_api_db_sync:
+    cap_add:
+    - AUDIT_WRITE
+    detach: false
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-cinder-api:17.1.6
+    net: host
+    privileged: false
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/cinder_api_db_sync.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/cinder:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/cinder:/var/log/cinder:z
+  cinder_volume_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R cinder:cinder /var/log/cinder
+    image: registry.redhat.io/rhosp-rhel9/openstack-cinder-volume:17.1.6
+    net: none
+    privileged: false
+    start_order: 0
+    user: root
+    volumes:
+    - /var/log/containers/cinder:/var/log/cinder
+  configure_cms_options:
+    command:
+    - /bin/bash
+    - -c
+    - CMS_OPTS=$(hiera ovn::controller::ovn_cms_options -c /etc/puppet/hiera.yaml);  if
+      [ X"$CMS_OPTS" !=  X ]; then ovs-vsctl set open . external_ids:ovn-cms-options=$CMS_OPTS;else
+      ovs-vsctl remove open . external_ids ovn-cms-options; fi
+    detach: false
+    environment:
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+    net: host
+    privileged: true
+    start_order: 0
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /lib/modules:/lib/modules:ro
+    - /run/openvswitch:/run/openvswitch:shared,z
+  glance_api_db_sync:
+    cap_add:
+    - AUDIT_WRITE
+    command: /usr/bin/bootstrap_host_exec glance_api su glance -s /bin/bash -c '/usr/local/bin/kolla_start'
+    detach: false
+    environment:
+      KOLLA_BOOTSTRAP: true
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-glance-api:17.1.6
+    net: host
+    privileged: false
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/glance:/var/log/glance:z
+    - /var/log/containers/httpd/glance:/var/log/httpd:z
+    - /var/lib/kolla/config_files/glance_api.json:/var/lib/kolla/config_files/config.json
+    - /var/lib/config-data/puppet-generated/glance_api:/var/lib/kolla/config_files/src:ro
+    - /var/lib/tripleo-config/ceph:/var/lib/kolla/config_files/src-ceph:z
+    - /var/lib/config-data/puppet-generated/iscsid/etc/iscsi:/var/lib/kolla/config_files/src-iscsid:ro
+    - /var/lib/glance:/var/lib/glance:shared
+  heat_engine_db_sync:
+    cap_add:
+    - AUDIT_WRITE
+    detach: false
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-heat-engine:17.1.6
+    net: host
+    privileged: false
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/heat:/var/log/heat:z
+    - /var/lib/kolla/config_files/heat_engine_db_sync.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/heat:/var/lib/kolla/config_files/src:ro
+  horizon:
+    environment:
+      ENABLE_DESIGNATE: 'yes'
+      ENABLE_HEAT: 'yes'
+      ENABLE_IRONIC: 'yes'
+      ENABLE_MANILA: 'yes'
+      ENABLE_OCTAVIA: 'yes'
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-horizon:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/horizon.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/horizon:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/horizon:/var/log/horizon:z
+    - /var/log/containers/httpd/horizon:/var/log/httpd:z
+    - /var/tmp/horizon:/var/tmp:z
+    - /var/www:/var/www:ro
+  iscsid:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-iscsid:17.1.6
+    net: host
+    privileged: true
+    restart: always
+    start_order: 2
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/iscsid.json:/var/lib/kolla/config_files/config.json:ro
+    - /dev:/dev
+    - /run:/run
+    - /sys:/sys
+    - /lib/modules:/lib/modules:ro
+    - /var/lib/config-data/puppet-generated/iscsid/etc/iscsi:/var/lib/kolla/config_files/src-iscsid:ro
+    - /etc/target:/etc/target:z
+    - /var/lib/iscsi:/var/lib/iscsi:z
+  keystone:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-keystone:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    start_order: 2
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/keystone:/var/log/keystone:z
+    - /var/log/containers/httpd/keystone:/var/log/httpd:z
+    - /etc/openldap:/etc/openldap:ro
+    - /var/lib/kolla/config_files/keystone.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/keystone:/var/lib/kolla/config_files/src:ro
+  keystone_bootstrap:
+    action: exec
+    command:
+    - keystone
+    - /usr/bin/bootstrap_host_exec
+    - keystone
+    - keystone-manage
+    - bootstrap
+    environment:
+      KOLLA_BOOTSTRAP: true
+      OS_BOOTSTRAP_ADMIN_URL: http://172.16.1.10:35357
+      OS_BOOTSTRAP_INTERNAL_URL: http://172.16.2.10:5000
+      OS_BOOTSTRAP_PASSWORD: h5fxn4fxfqsszsmn9hlsb4ztd
+      OS_BOOTSTRAP_PROJECT_NAME: admin
+      OS_BOOTSTRAP_PUBLIC_URL: http://192.168.131.60:5000
+      OS_BOOTSTRAP_REGION_ID: regionOne
+      OS_BOOTSTRAP_ROLE_NAME: admin
+      OS_BOOTSTRAP_SERVICE_NAME: keystone
+      OS_BOOTSTRAP_USERNAME: admin
+    start_order: 3
+    user: root
+  keystone_cron:
+    command:
+    - /bin/bash
+    - -c
+    - /usr/local/bin/kolla_set_configs && /usr/sbin/crond -n
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /usr/share/openstack-tripleo-common/healthcheck/cron keystone
+    image: registry.redhat.io/rhosp-rhel9/openstack-keystone:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    start_order: 4
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/keystone:/var/log/keystone:z
+    - /var/log/containers/httpd/keystone:/var/log/httpd:z
+    - /var/lib/kolla/config_files/keystone_cron.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/keystone:/var/lib/kolla/config_files/src:ro
+  keystone_db_sync:
+    command:
+    - /usr/bin/bootstrap_host_exec
+    - keystone
+    - /usr/local/bin/kolla_start
+    detach: false
+    environment:
+      KOLLA_BOOTSTRAP: true
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-keystone:17.1.6
+    net: host
+    privileged: false
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/keystone:/var/log/keystone:z
+    - /var/log/containers/httpd/keystone:/var/log/httpd:z
+    - /etc/openldap:/etc/openldap:ro
+    - /var/lib/kolla/config_files/keystone.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/keystone:/var/lib/kolla/config_files/src:ro
+  neutron_db_sync:
+    cap_add:
+    - AUDIT_WRITE
+    detach: false
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-neutron-server:17.1.6
+    net: host
+    privileged: false
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/neutron:/var/log/neutron:z
+    - /var/log/containers/httpd/neutron-api:/var/log/httpd:z
+    - /var/lib/kolla/config_files/neutron_api_db_sync.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/neutron:/var/lib/kolla/config_files/src:ro
+  nova_api_db_sync:
+    cap_add:
+    - AUDIT_WRITE
+    detach: false
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-api:17.1.6
+    net: host
+    start_order: 0
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova:z
+    - /var/log/containers/httpd/nova-api:/var/log/httpd:z
+    - /var/lib/kolla/config_files/nova_api_db_sync.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova:/var/lib/kolla/config_files/src:ro
+  nova_api_ensure_default_cells:
+    detach: false
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      __OS_DEBUG: 'false'
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-api:17.1.6
+    net: host
+    privileged: false
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova:z
+    - /var/log/containers/httpd/nova-api:/var/log/httpd:z
+    - /var/lib/kolla/config_files/nova_api_ensure_default_cells.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova:/var/lib/kolla/config_files/src:ro
+    - /var/lib/container-config-scripts:/container-config-scripts:z
+  nova_db_sync:
+    cap_add:
+    - AUDIT_WRITE
+    detach: false
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-conductor:17.1.6
+    net: host
+    start_order: 3
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/lib/kolla/config_files/nova_conductor_db_sync.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova:/var/lib/kolla/config_files/src:ro
+  ovn_controller:
+    depends_on:
+    - openvswitch.service
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck 6642
+    image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+    net: host
+    privileged: true
+    restart: always
+    start_order: 1
+    user: root
+    volumes:
+    - /var/lib/kolla/config_files/ovn_controller.json:/var/lib/kolla/config_files/config.json:ro
+    - /lib/modules:/lib/modules:ro
+    - /run:/run
+    - /var/lib/openvswitch/ovn:/run/ovn:shared,z
+    - /var/log/containers/openvswitch:/var/log/openvswitch:z
+    - /var/log/containers/openvswitch:/var/log/ovn:z
+  placement_api_db_sync:
+    cap_add:
+    - AUDIT_WRITE
+    detach: false
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-placement-api:17.1.6
+    net: host
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/placement:/var/log/placement:z
+    - /var/log/containers/httpd/placement:/var/log/httpd:z
+    - /var/lib/kolla/config_files/placement_api_db_sync.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/placement:/var/lib/kolla/config_files/src:ro
+  swift_copy_rings:
+    command:
+    - /bin/bash
+    - -c
+    - cp -v -dR --preserve -t /etc/swift /swift_ringbuilder/etc/swift/*.gz /swift_ringbuilder/etc/swift/*.builder
+      /swift_ringbuilder/etc/swift/backups
+    detach: false
+    environment:
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-proxy-server:17.1.6
+    net: none
+    user: root
+    volumes:
+    - /var/lib/config-data/puppet-generated/swift/etc/swift:/etc/swift:rw,z
+    - /var/lib/config-data/puppet-generated/swift_ringbuilder:/swift_ringbuilder:ro
+  swift_setup_srv:
+    command:
+    - find
+    - /srv/node
+    - -maxdepth
+    - '1'
+    - -type
+    - d
+    - -exec
+    - chown
+    - 'swift:'
+    - '{}'
+    - ;
+    environment:
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-account:17.1.6
+    net: none
+    user: root
+    volumes:
+    - /srv/node:/srv/node:z
+step_4:
+  cinder_api:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-cinder-api:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/cinder_api.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/cinder:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/cinder:/var/log/cinder:z
+    - /var/log/containers/httpd/cinder-api:/var/log/httpd:z
+  cinder_api_cron:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /usr/share/openstack-tripleo-common/healthcheck/cron cinder
+    image: registry.redhat.io/rhosp-rhel9/openstack-cinder-api:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/cinder_api_cron.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/cinder:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/cinder:/var/log/cinder:z
+    - /var/log/containers/httpd/cinder-api:/var/log/httpd:z
+  cinder_scheduler:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck 5672
+    image: registry.redhat.io/rhosp-rhel9/openstack-cinder-scheduler:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/config-data/puppet-generated/cinder:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/cinder:/var/log/cinder:z
+    - /var/lib/kolla/config_files/cinder_scheduler.json:/var/lib/kolla/config_files/config.json:ro
+  glance_api:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-glance-api:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    start_order: 2
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/glance:/var/log/glance:z
+    - /var/log/containers/httpd/glance:/var/log/httpd:z
+    - /var/lib/kolla/config_files/glance_api.json:/var/lib/kolla/config_files/config.json
+    - /var/lib/config-data/puppet-generated/glance_api:/var/lib/kolla/config_files/src:ro
+    - /var/lib/tripleo-config/ceph:/var/lib/kolla/config_files/src-ceph:z
+    - /var/lib/config-data/puppet-generated/iscsid/etc/iscsi:/var/lib/kolla/config_files/src-iscsid:ro
+    - /var/lib/glance:/var/lib/glance:shared
+  glance_api_cron:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /usr/share/openstack-tripleo-common/healthcheck/cron glance
+    image: registry.redhat.io/rhosp-rhel9/openstack-glance-api:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    start_order: 2
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/glance:/var/log/glance:z
+    - /var/log/containers/httpd/glance:/var/log/httpd:z
+    - /var/lib/kolla/config_files/glance_api_cron.json:/var/lib/kolla/config_files/config.json
+    - /var/lib/config-data/puppet-generated/glance_api:/var/lib/kolla/config_files/src:ro
+    - /var/lib/glance:/var/lib/glance:shared
+  glance_api_internal:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-glance-api:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    start_order: 2
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/glance:/var/log/glance:z
+    - /var/log/containers/httpd/glance:/var/log/httpd:z
+    - /var/lib/kolla/config_files/glance_api.json:/var/lib/kolla/config_files/config.json
+    - /var/lib/config-data/puppet-generated/glance_api_internal:/var/lib/kolla/config_files/src:ro
+    - /var/lib/tripleo-config/ceph:/var/lib/kolla/config_files/src-ceph:z
+    - /var/lib/config-data/puppet-generated/iscsid/etc/iscsi:/var/lib/kolla/config_files/src-iscsid:ro
+    - /var/lib/glance:/var/lib/glance:shared
+  heat_api:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-heat-api:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/heat:/var/log/heat:z
+    - /var/log/containers/httpd/heat-api:/var/log/httpd:z
+    - /var/lib/kolla/config_files/heat_api.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/heat_api:/var/lib/kolla/config_files/src:ro
+  heat_api_cfn:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-heat-api-cfn:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/heat:/var/log/heat:z
+    - /var/log/containers/httpd/heat-api-cfn:/var/log/httpd:z
+    - /var/lib/kolla/config_files/heat_api_cfn.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/heat_api_cfn:/var/lib/kolla/config_files/src:ro
+  heat_api_cron:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /usr/share/openstack-tripleo-common/healthcheck/cron heat
+    image: registry.redhat.io/rhosp-rhel9/openstack-heat-api:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/heat:/var/log/heat:z
+    - /var/log/containers/httpd/heat-api:/var/log/httpd:z
+    - /var/lib/kolla/config_files/heat_api_cron.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/heat_api:/var/lib/kolla/config_files/src:ro
+  heat_engine:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck 5672
+    image: registry.redhat.io/rhosp-rhel9/openstack-heat-engine:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    stop_grace_period: 60
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/heat:/var/log/heat:z
+    - /var/lib/kolla/config_files/heat_engine.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/heat:/var/lib/kolla/config_files/src:ro
+  keystone_refresh:
+    action: exec
+    command:
+    - keystone
+    - pkill
+    - --signal
+    - USR1
+    - httpd
+    start_order: 1
+    user: root
+  logrotate_crond:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /usr/share/openstack-tripleo-common/healthcheck/cron
+    image: registry.redhat.io/rhosp-rhel9/openstack-cron:17.1.6
+    net: none
+    pid: host
+    privileged: true
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/logrotate-crond.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/crond:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers:/var/log/containers:z
+  neutron_api:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-neutron-server:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    start_order: 0
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/neutron:/var/log/neutron:z
+    - /var/log/containers/httpd/neutron-api:/var/log/httpd:z
+    - /var/lib/kolla/config_files/neutron_api.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/neutron:/var/lib/kolla/config_files/src:ro
+  nova_api:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-api:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    start_order: 2
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova:z
+    - /var/log/containers/httpd/nova-api:/var/log/httpd:z
+    - /var/lib/kolla/config_files/nova_api.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova:/var/lib/kolla/config_files/src:ro
+  nova_api_cron:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /usr/share/openstack-tripleo-common/healthcheck/cron nova
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-api:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    start_order: 4
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova:z
+    - /var/log/containers/httpd/nova-api:/var/log/httpd:z
+    - /var/lib/kolla/config_files/nova_api_cron.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova:/var/lib/kolla/config_files/src:ro
+  nova_conductor:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck 5672
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-conductor:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/lib/kolla/config_files/nova_conductor.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova:/var/lib/kolla/config_files/src:ro
+  nova_metadata:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-api:17.1.6
+    net: host
+    restart: always
+    start_order: 2
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova:z
+    - /var/log/containers/httpd/nova-metadata:/var/log/httpd:z
+    - /var/lib/kolla/config_files/nova_metadata.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova_metadata:/var/lib/kolla/config_files/src:ro
+  nova_scheduler:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck 5672
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-scheduler:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/lib/kolla/config_files/nova_scheduler.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova:/var/lib/kolla/config_files/src:ro
+  nova_vnc_proxy:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-novncproxy:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/lib/kolla/config_files/nova_vnc_proxy.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova:/var/lib/kolla/config_files/src:ro
+  nova_wait_for_api_service:
+    detach: false
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      __OS_DEBUG: 'false'
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-api:17.1.6
+    net: host
+    privileged: false
+    start_order: 3
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova:z
+    - /var/log/containers/httpd/nova-api:/var/log/httpd:z
+    - /var/lib/kolla/config_files/nova_wait_for_api_service.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova:/var/lib/kolla/config_files/src:ro
+    - /var/lib/container-config-scripts:/container-config-scripts:z
+  placement_api:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-placement-api:17.1.6
+    net: host
+    restart: always
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/placement:/var/log/placement:z
+    - /var/log/containers/httpd/placement:/var/log/httpd:z
+    - /var/lib/kolla/config_files/placement_api.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/placement:/var/lib/kolla/config_files/src:ro
+  placement_wait_for_service:
+    detach: false
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      __OS_DEBUG: 'false'
+    image: registry.redhat.io/rhosp-rhel9/openstack-placement-api:17.1.6
+    net: host
+    privileged: false
+    start_order: 2
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/placement:/var/log/placement:z
+    - /var/log/containers/httpd/placement:/var/log/httpd:z
+    - /var/lib/kolla/config_files/placement_api_wait_for_service.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/placement:/var/lib/kolla/config_files/src:ro
+    - /var/lib/container-config-scripts:/container-config-scripts:z
+  swift_account_auditor:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-account:17.1.6
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_account_auditor.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift:z
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_account_reaper:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-account:17.1.6
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_account_reaper.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift:z
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_account_replicator:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-account:17.1.6
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_account_replicator.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_account_server:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-account:17.1.6
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_account_server.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_container_auditor:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-container:17.1.6
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_container_auditor.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_container_replicator:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-container:17.1.6
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_container_replicator.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_container_server:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-container:17.1.6
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_container_server.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_container_updater:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-container:17.1.6
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_container_updater.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_object_auditor:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-object:17.1.6
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_object_auditor.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_object_expirer:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-proxy-server:17.1.6
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_object_expirer.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_object_replicator:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-object:17.1.6
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_object_replicator.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_object_server:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-object:17.1.6
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_object_server.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_object_updater:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-object:17.1.6
+    net: host
+    restart: always
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_object_updater.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/cache/swift:/var/cache/swift
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_proxy:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-proxy-server:17.1.6
+    net: host
+    restart: always
+    start_order: 2
+    user: swift
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_proxy.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/log/containers/swift:/var/log/swift:z
+  swift_rsync:
+    cap_add:
+    - NET_BIND_SERVICE
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-swift-object:17.1.6
+    net: host
+    privileged: false
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/swift_rsync.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/swift:/var/lib/kolla/config_files/src:ro
+    - /srv/node:/srv/node
+    - /dev:/dev
+    - /var/log/containers/swift:/var/log/swift:z

@@ -1,0 +1,658 @@
+step_2:
+  create_haproxy_wrapper:
+    command:
+    - /container_puppet_apply.sh
+    - '4'
+    - file
+    - include ::tripleo::profile::base::neutron::ovn_metadata_agent_wrappers
+    detach: false
+    image: registry.redhat.io/rhosp-rhel9/openstack-neutron-metadata-agent-ovn:17.1.6
+    net: host
+    pid: host
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /var/lib/container-config-scripts/container_puppet_apply.sh:/container_puppet_apply.sh:ro
+    - /etc/puppet:/tmp/puppet-etc:ro
+    - /usr/share/openstack-puppet/modules:/usr/share/openstack-puppet/modules:ro
+    - /run/openvswitch:/run/openvswitch:shared,z
+    - /var/lib/neutron:/var/lib/neutron:shared,z
+  create_virtlogd_wrapper:
+    cgroupns: host
+    command:
+    - /container_puppet_apply.sh
+    - '4'
+    - file
+    - include ::tripleo::profile::base::nova::virtlogd_wrapper
+    detach: false
+    environment:
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-libvirt:17.1.6
+    net: host
+    pid: host
+    start_order: 1
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /var/lib/container-config-scripts/container_puppet_apply.sh:/container_puppet_apply.sh:ro
+    - /etc/puppet:/tmp/puppet-etc:ro
+    - /usr/share/openstack-puppet/modules:/usr/share/openstack-puppet/modules:ro
+    - /var/lib/container-config-scripts:/var/lib/container-config-scripts:shared,z
+  nova_compute_init_log:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R nova:nova /var/log/nova
+    environment:
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-compute:17.1.6
+    net: none
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/nova:/var/log/nova:z
+  nova_virtqemud_init_logs:
+    command:
+    - /bin/bash
+    - -c
+    - chown -R tss:tss /var/log/swtpm
+    environment:
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-libvirt:17.1.6
+    net: none
+    privileged: false
+    user: root
+    volumes:
+    - /var/log/containers/libvirt/swtpm:/var/log/swtpm:shared,z
+step_3:
+  configure_cms_options:
+    command:
+    - /bin/bash
+    - -c
+    - CMS_OPTS=$(hiera ovn::controller::ovn_cms_options -c /etc/puppet/hiera.yaml);  if
+      [ X"$CMS_OPTS" !=  X ]; then ovs-vsctl set open . external_ids:ovn-cms-options=$CMS_OPTS;else
+      ovs-vsctl remove open . external_ids ovn-cms-options; fi
+    detach: false
+    environment:
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+    net: host
+    privileged: true
+    start_order: 0
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /lib/modules:/lib/modules:ro
+    - /run/openvswitch:/run/openvswitch:shared,z
+  iscsid:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-iscsid:17.1.6
+    net: host
+    privileged: true
+    restart: always
+    start_order: 2
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/iscsid.json:/var/lib/kolla/config_files/config.json:ro
+    - /dev:/dev
+    - /run:/run
+    - /sys:/sys
+    - /lib/modules:/lib/modules:ro
+    - /var/lib/config-data/puppet-generated/iscsid/etc/iscsi:/var/lib/kolla/config_files/src-iscsid:ro
+    - /etc/target:/etc/target:z
+    - /var/lib/iscsi:/var/lib/iscsi:z
+  nova_statedir_owner:
+    command: /container-config-scripts/pyshim.sh /container-config-scripts/nova_statedir_ownership.py
+    detach: false
+    environment:
+      NOVA_STATEDIR_OWNERSHIP_SKIP: triliovault-mounts
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+      __OS_DEBUG: 'false'
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-compute:17.1.6
+    net: none
+    privileged: false
+    security_opt:
+    - label=disable
+    user: root
+    volumes:
+    - /var/lib/nova:/var/lib/nova:shared
+    - /var/lib/_nova_secontext:/var/lib/_nova_secontext:shared,z
+    - /var/lib/container-config-scripts:/container-config-scripts:z
+  nova_virtlogd_wrapper:
+    cgroupns: host
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-libvirt:17.1.6
+    net: host
+    pid: host
+    privileged: true
+    restart: always
+    security_opt:
+    - label=disable
+    start_order: 0
+    ulimit:
+    - nofile=131072
+    - nproc=126960
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/libvirt:/var/log/libvirt:shared,z
+    - /lib/modules:/lib/modules:ro
+    - /dev:/dev
+    - /run:/run
+    - /sys/fs/cgroup:/sys/fs/cgroup
+    - /sys/fs/selinux:/sys/fs/selinux
+    - /etc/selinux/config:/etc/selinux/config:ro
+    - /etc/libvirt:/etc/libvirt:shared
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /run/libvirt:/run/libvirt:shared,z
+    - /var/lib/nova:/var/lib/nova:shared
+    - /var/lib/libvirt:/var/lib/libvirt:shared
+    - /var/cache/libvirt:/var/cache/libvirt:shared
+    - /var/lib/vhost_sockets:/var/lib/vhost_sockets
+    - /var/lib/config-data/puppet-generated/nova_libvirt:/var/lib/kolla/config_files/src:ro
+    - /var/lib/tripleo-config/ceph:/var/lib/kolla/config_files/src-ceph:z
+    - /var/lib/kolla/config_files/nova_virtlogd.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/container-config-scripts/virtlogd_wrapper:/usr/local/bin/virtlogd_wrapper:ro
+  nova_virtnodedevd:
+    cgroupns: host
+    depends_on:
+    - tripleo_nova_virtlogd_wrapper.service
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-libvirt:17.1.6
+    net: host
+    pid: host
+    pids_limit: 65536
+    privileged: true
+    restart: always
+    security_opt:
+    - label=level:s0
+    - label=type:spc_t
+    - label=filetype:container_share_t
+    start_order: 2
+    ulimit:
+    - nofile=131072
+    - nproc=126960
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/libvirt:/var/log/libvirt:shared,z
+    - /lib/modules:/lib/modules:ro
+    - /dev:/dev
+    - /run:/run
+    - /sys/fs/cgroup:/sys/fs/cgroup
+    - /sys/fs/selinux:/sys/fs/selinux
+    - /etc/selinux/config:/etc/selinux/config:ro
+    - /etc/libvirt:/etc/libvirt:shared
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /run/libvirt:/run/libvirt:shared,z
+    - /var/lib/nova:/var/lib/nova:shared
+    - /var/lib/libvirt:/var/lib/libvirt:shared
+    - /var/cache/libvirt:/var/cache/libvirt:shared
+    - /var/lib/vhost_sockets:/var/lib/vhost_sockets
+    - /var/lib/config-data/puppet-generated/nova_libvirt:/var/lib/kolla/config_files/src:ro
+    - /var/lib/tripleo-config/ceph:/var/lib/kolla/config_files/src-ceph:z
+    - /var/lib/kolla/config_files/nova_virtnodedevd.json:/var/lib/kolla/config_files/config.json:ro
+  nova_virtproxyd:
+    cgroupns: host
+    depends_on:
+    - tripleo_nova_virtlogd_wrapper.service
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-libvirt:17.1.6
+    net: host
+    pid: host
+    pids_limit: 65536
+    privileged: true
+    restart: always
+    security_opt:
+    - label=level:s0
+    - label=type:spc_t
+    - label=filetype:container_share_t
+    start_order: 5
+    ulimit:
+    - nofile=131072
+    - nproc=126960
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/libvirt:/var/log/libvirt:shared,z
+    - /lib/modules:/lib/modules:ro
+    - /dev:/dev
+    - /run:/run
+    - /sys/fs/cgroup:/sys/fs/cgroup
+    - /sys/fs/selinux:/sys/fs/selinux
+    - /etc/selinux/config:/etc/selinux/config:ro
+    - /etc/libvirt:/etc/libvirt:shared
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /run/libvirt:/run/libvirt:shared,z
+    - /var/lib/nova:/var/lib/nova:shared
+    - /var/lib/libvirt:/var/lib/libvirt:shared
+    - /var/cache/libvirt:/var/cache/libvirt:shared
+    - /var/lib/vhost_sockets:/var/lib/vhost_sockets
+    - /var/lib/config-data/puppet-generated/nova_libvirt:/var/lib/kolla/config_files/src:ro
+    - /var/lib/tripleo-config/ceph:/var/lib/kolla/config_files/src-ceph:z
+    - /var/lib/kolla/config_files/nova_virtproxyd.json:/var/lib/kolla/config_files/config.json:ro
+  nova_virtqemud:
+    cgroupns: host
+    depends_on:
+    - tripleo_nova_virtlogd_wrapper.service
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-libvirt:17.1.6
+    net: host
+    pid: host
+    pids_limit: 65536
+    privileged: true
+    restart: always
+    security_opt:
+    - label=level:s0
+    - label=type:spc_t
+    - label=filetype:container_share_t
+    start_order: 4
+    ulimit:
+    - nofile=131072
+    - nproc=126960
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/libvirt:/var/log/libvirt:shared,z
+    - /lib/modules:/lib/modules:ro
+    - /dev:/dev
+    - /run:/run
+    - /sys/fs/cgroup:/sys/fs/cgroup
+    - /sys/fs/selinux:/sys/fs/selinux
+    - /etc/selinux/config:/etc/selinux/config:ro
+    - /etc/libvirt:/etc/libvirt:shared
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /run/libvirt:/run/libvirt:shared,z
+    - /var/lib/nova:/var/lib/nova:shared
+    - /var/lib/libvirt:/var/lib/libvirt:shared
+    - /var/cache/libvirt:/var/cache/libvirt:shared
+    - /var/lib/vhost_sockets:/var/lib/vhost_sockets
+    - /var/lib/config-data/puppet-generated/nova_libvirt:/var/lib/kolla/config_files/src:ro
+    - /var/lib/tripleo-config/ceph:/var/lib/kolla/config_files/src-ceph:z
+    - /var/lib/kolla/config_files/nova_virtqemud.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/log/containers/libvirt/swtpm:/var/log/swtpm:z
+  nova_virtsecretd:
+    cgroupns: host
+    depends_on:
+    - tripleo_nova_virtlogd_wrapper.service
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-libvirt:17.1.6
+    net: host
+    pid: host
+    pids_limit: 65536
+    privileged: true
+    restart: always
+    security_opt:
+    - label=level:s0
+    - label=type:spc_t
+    - label=filetype:container_share_t
+    start_order: 1
+    ulimit:
+    - nofile=131072
+    - nproc=126960
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/libvirt:/var/log/libvirt:shared,z
+    - /lib/modules:/lib/modules:ro
+    - /dev:/dev
+    - /run:/run
+    - /sys/fs/cgroup:/sys/fs/cgroup
+    - /sys/fs/selinux:/sys/fs/selinux
+    - /etc/selinux/config:/etc/selinux/config:ro
+    - /etc/libvirt:/etc/libvirt:shared
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /run/libvirt:/run/libvirt:shared,z
+    - /var/lib/nova:/var/lib/nova:shared
+    - /var/lib/libvirt:/var/lib/libvirt:shared
+    - /var/cache/libvirt:/var/cache/libvirt:shared
+    - /var/lib/vhost_sockets:/var/lib/vhost_sockets
+    - /var/lib/config-data/puppet-generated/nova_libvirt:/var/lib/kolla/config_files/src:ro
+    - /var/lib/tripleo-config/ceph:/var/lib/kolla/config_files/src-ceph:z
+    - /var/lib/kolla/config_files/nova_virtsecretd.json:/var/lib/kolla/config_files/config.json:ro
+  nova_virtstoraged:
+    cgroupns: host
+    depends_on:
+    - tripleo_nova_virtlogd_wrapper.service
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-libvirt:17.1.6
+    net: host
+    pid: host
+    pids_limit: 65536
+    privileged: true
+    restart: always
+    security_opt:
+    - label=level:s0
+    - label=type:spc_t
+    - label=filetype:container_share_t
+    start_order: 3
+    ulimit:
+    - nofile=131072
+    - nproc=126960
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/libvirt:/var/log/libvirt:shared,z
+    - /lib/modules:/lib/modules:ro
+    - /dev:/dev
+    - /run:/run
+    - /sys/fs/cgroup:/sys/fs/cgroup
+    - /sys/fs/selinux:/sys/fs/selinux
+    - /etc/selinux/config:/etc/selinux/config:ro
+    - /etc/libvirt:/etc/libvirt:shared
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /run/libvirt:/run/libvirt:shared,z
+    - /var/lib/nova:/var/lib/nova:shared
+    - /var/lib/libvirt:/var/lib/libvirt:shared
+    - /var/cache/libvirt:/var/cache/libvirt:shared
+    - /var/lib/vhost_sockets:/var/lib/vhost_sockets
+    - /var/lib/config-data/puppet-generated/nova_libvirt:/var/lib/kolla/config_files/src:ro
+    - /var/lib/tripleo-config/ceph:/var/lib/kolla/config_files/src-ceph:z
+    - /var/lib/kolla/config_files/nova_virtstoraged.json:/var/lib/kolla/config_files/config.json:ro
+  ovn_controller:
+    depends_on:
+    - openvswitch.service
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck 6642
+    image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+    net: host
+    privileged: true
+    restart: always
+    start_order: 1
+    user: root
+    volumes:
+    - /var/lib/kolla/config_files/ovn_controller.json:/var/lib/kolla/config_files/config.json:ro
+    - /lib/modules:/lib/modules:ro
+    - /run:/run
+    - /var/lib/openvswitch/ovn:/run/ovn:shared,z
+    - /var/log/containers/openvswitch:/var/log/openvswitch:z
+    - /var/log/containers/openvswitch:/var/log/ovn:z
+step_4:
+  logrotate_crond:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /usr/share/openstack-tripleo-common/healthcheck/cron
+    image: registry.redhat.io/rhosp-rhel9/openstack-cron:17.1.6
+    net: none
+    pid: host
+    privileged: true
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/logrotate-crond.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/crond:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers:/var/log/containers:z
+  nova_libvirt_init_secret:
+    cgroupns: host
+    command: /nova_libvirt_init_secret.sh ceph:openstack
+    detach: false
+    environment:
+      LIBVIRT_DEFAULT_URI: qemu:///system
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-libvirt:17.1.6
+    net: host
+    privileged: false
+    security_opt:
+    - label=disable
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/config-data/puppet-generated/nova_libvirt/etc/nova:/etc/nova
+    - /etc/libvirt:/etc/libvirt
+    - /run/libvirt:/run/libvirt:shared,z
+    - /var/lib/libvirt:/var/lib/libvirt:shared
+    - /var/lib/container-config-scripts/nova_libvirt_init_secret.sh:/nova_libvirt_init_secret.sh:ro
+    - /var/lib/tripleo-config/ceph:/etc/ceph:ro
+  nova_migration_target:
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-compute:17.1.6
+    net: host
+    privileged: true
+    restart: always
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/nova-migration-target.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova_libvirt:/var/lib/kolla/config_files/src:ro
+    - /etc/ssh:/host-ssh:ro
+    - /run/libvirt:/run/libvirt:shared,z
+    - /var/lib/nova:/var/lib/nova:shared
+  ovn_metadata_agent:
+    cgroupns: host
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+    healthcheck:
+      test: /openstack/healthcheck
+    image: registry.redhat.io/rhosp-rhel9/openstack-neutron-metadata-agent-ovn:17.1.6
+    net: host
+    pid: host
+    privileged: true
+    restart: always
+    start_order: 1
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/neutron:/var/log/neutron:z
+    - /var/lib/kolla/config_files/ovn_metadata_agent.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/neutron:/var/lib/kolla/config_files/src:ro
+    - /lib/modules:/lib/modules:ro
+    - /run/openvswitch:/run/openvswitch:shared,z
+    - /var/lib/neutron:/var/lib/neutron:shared,z
+    - /run/netns:/run/netns:shared
+    - /var/lib/neutron/kill_scripts:/etc/neutron/kill_scripts:shared,z
+    - /var/lib/neutron/ovn_metadata_haproxy_wrapper:/usr/local/bin/haproxy:ro
+  setup_ovs_manager:
+    command:
+    - /container_puppet_apply.sh
+    - '4'
+    - exec
+    - include tripleo::profile::base::neutron::ovn_metadata
+    detach: false
+    environment:
+      TRIPLEO_DEPLOY_IDENTIFIER: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    image: registry.redhat.io/rhosp-rhel9/openstack-neutron-metadata-agent-ovn:17.1.6
+    net: host
+    privileged: true
+    start_order: 0
+    user: root
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /var/lib/container-config-scripts/container_puppet_apply.sh:/container_puppet_apply.sh:ro
+    - /etc/puppet:/tmp/puppet-etc:ro
+    - /usr/share/openstack-puppet/modules:/usr/share/openstack-puppet/modules:ro
+    - /lib/modules:/lib/modules:ro
+    - /run/openvswitch:/run/openvswitch:shared,z
+step_5:
+  nova_compute:
+    depends_on:
+    - tripleo_nova_libvirt.target
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      LIBGUESTFS_BACKEND: direct
+    healthcheck:
+      test: /openstack/healthcheck 5672
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-compute:17.1.6
+    ipc: host
+    net: host
+    privileged: true
+    restart: always
+    start_order: 3
+    ulimit:
+    - nofile=131072
+    - memlock=67108864
+    user: nova
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /etc/ssh/ssh_known_hosts:/etc/ssh/ssh_known_hosts:ro
+    - /var/lib/kolla/config_files/nova_compute.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova_libvirt:/var/lib/kolla/config_files/src:ro
+    - /var/lib/config-data/puppet-generated/iscsid/etc/iscsi:/var/lib/kolla/config_files/src-iscsid:ro
+    - /var/lib/tripleo-config/ceph:/var/lib/kolla/config_files/src-ceph:z
+    - /dev:/dev
+    - /lib/modules:/lib/modules:ro
+    - /run:/run
+    - /run/nova:/run/nova:z
+    - /var/lib/iscsi:/var/lib/iscsi:z
+    - /var/lib/libvirt:/var/lib/libvirt:shared
+    - /sys/class/net:/sys/class/net
+    - /sys/bus/pci:/sys/bus/pci
+    - /boot:/boot:ro
+    - /var/lib/nova:/var/lib/nova:shared
+  nova_wait_for_compute_service:
+    detach: false
+    environment:
+      KOLLA_CONFIG_STRATEGY: COPY_ALWAYS
+      __OS_DEBUG: 'false'
+    image: registry.redhat.io/rhosp-rhel9/openstack-nova-compute:17.1.6
+    net: host
+    start_order: 4
+    user: nova
+    volumes:
+    - /etc/hosts:/etc/hosts:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /etc/pki/ca-trust/extracted:/etc/pki/ca-trust/extracted:ro
+    - /etc/pki/ca-trust/source/anchors:/etc/pki/ca-trust/source/anchors:ro
+    - /etc/pki/tls/certs/ca-bundle.crt:/etc/pki/tls/certs/ca-bundle.crt:ro
+    - /etc/pki/tls/certs/ca-bundle.trust.crt:/etc/pki/tls/certs/ca-bundle.trust.crt:ro
+    - /etc/pki/tls/cert.pem:/etc/pki/tls/cert.pem:ro
+    - /dev/log:/dev/log
+    - /etc/puppet:/etc/puppet:ro
+    - /var/lib/kolla/config_files/nova_compute_wait_for_compute_service.json:/var/lib/kolla/config_files/config.json:ro
+    - /var/lib/config-data/puppet-generated/nova_libvirt:/var/lib/kolla/config_files/src:ro
+    - /var/log/containers/nova:/var/log/nova
+    - /var/lib/container-config-scripts:/container-config-scripts

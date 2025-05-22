@@ -1,0 +1,163 @@
+- block:
+  - include_role:
+      name: tripleo_run_cephadm
+      tasks_from: prepare.yml
+    name: create cephadm working directory and related files
+    vars:
+      ceph_config_overrides:
+        mgr:
+          mgr/cephadm/autotune_memory_target_ratio: 0.2
+        osd:
+          osd_memory_target_autotune: true
+          osd_numa_auto_affinity: true
+        rgw_swift_enforce_content_length: true
+        rgw_swift_versioning_enabled: true
+      ceph_default_overrides:
+        global: {}
+      ceph_keys:
+        extra_keys: []
+        manila:
+          key: AQC2IS5oAAAAABAABAAACQUABwMDBwIIBQQCCQ==
+          name: manila
+        openstack_client:
+          key: AQCxIS5oAAAAABAACAcGBwcHAwQHBwMDAAEDCQ==
+          name: openstack
+        radosgw:
+          key: AQCxIS5oAAAAABAAAgUBCQACAAgCBwUGBwIIAQ==
+          name: radosgw
+      ceph_osd_spec:
+        data_devices:
+          all: true
+      ceph_pools:
+        cinder_backup_pool:
+          enabled: true
+          name: backups
+        cinder_pool:
+          cinder_extra_pools: []
+          enabled: true
+          name: volumes
+        extra_pools: []
+        glance_pool:
+          enabled:
+            or:
+            - false
+            - equals:
+              - rbd
+              - rbd
+          name: images
+        gnocchi_pool:
+          enabled: false
+          name: metrics
+        nova_pool:
+          enabled: true
+          name: vms
+      ceph_spec_fqdn: true
+      cephadm_extra_vars:
+        ceph_container_registry_auth: true
+        ceph_container_registry_password: i.am.king.bison.6591
+        ceph_container_registry_username: grosenbe-redhat.com
+        cephfs: cephfs
+        cluster_network: 172.16.5.0/24
+        public_network: 172.16.4.0/24
+        tripleo_ceph_client_vars: '{{ playbook_dir }}/cephadm/ceph_client.yml'
+        tripleo_cephadm_apply_ceph_conf_overrides_on_update: false
+        tripleo_cephadm_cluster: ceph
+        tripleo_cephadm_container_cli: podman
+        tripleo_cephadm_container_image: rhceph/rhceph-6-rhel9
+        tripleo_cephadm_container_ns: registry.redhat.io
+        tripleo_cephadm_container_tag: 6-199
+        tripleo_cephadm_crush_rules: []
+        tripleo_cephadm_dashboard_enabled: false
+        tripleo_cephadm_debug: false
+        tripleo_cephadm_default_container: false
+        tripleo_cephadm_enable_trash_scheduler: false
+        tripleo_cephadm_fsid: d1afcd63-9dac-4853-8920-bfe986d806df
+        tripleo_cephadm_rbd_trash: '15'
+        tripleo_cephadm_verbose: false
+      manila_pools:
+        data: manila_data
+        metadata: manila_metadata
+      tripleo_cephadm_deployed_ceph: false
+      tripleo_cephadm_dynamic_spec: true
+      tripleo_run_cephadm_spec_path: '{{ playbook_dir }}/cephadm/ceph_spec.yaml'
+  - include_role:
+      name: tripleo_run_cephadm
+      tasks_from: enable_ceph_admin_user.yml
+    name: Prepare cephadm user and keys
+    vars:
+      deployed_ceph: false
+      external_ceph: false
+    when:
+    - not external_ceph
+    - (not deployed_ceph and (groups['ceph_mon'] | default([]) | length > 0 or groups['ceph_nfs']
+      | default([]) | length > 0)) or (deployed_ceph and ((groups['ceph_rgw'] | default([])
+      != groups['ceph_mon'] | default([]) and groups['ceph_rgw'] | default([]) | length
+      > 0) or (groups['ceph_mds'] | default([]) != groups['ceph_mon'] | default([])
+      and groups['ceph_mds'] | default([]) | length > 0) or (groups['ceph_nfs'] |
+      default([]) != groups['ceph_mon'] | default([]) and groups['ceph_nfs'] | default([])
+      | length > 0) or (groups['ceph_rbdmirror'] | default([]) != groups['ceph_mon']
+      | default([]) and groups['ceph_rbdmirror'] | default([]) | length > 0)))
+  - include_role:
+      name: tripleo_run_cephadm
+    name: Deploy or configure the cephadm Ceph cluster
+    vars:
+      external_ceph: false
+    when:
+    - not external_ceph
+    - groups['ceph_mon'] | default([]) | length > 0 or groups['ceph_nfs'] | default([])
+      | length > 0
+  name: ceph_base_external_deploy_task
+  when: step|int == 2
+- block:
+  - name: Check if the input variable file exists
+    register: ceph_input_vars
+    stat:
+      path: '{{ tripleo_ceph_client_vars }}'
+    vars:
+      tripleo_ceph_client_vars: '{{ playbook_dir }}/cephadm/ceph_client.yml'
+  - copy:
+      content: 'tripleo_ceph_client_fsid: "{{ tripleo_ceph_client_fsid }}"
+
+        external_cluster_mon_ips: "{{ external_cluster_mon_ips }}"
+
+        '
+      dest: '{{ tripleo_ceph_client_vars }}'
+    name: Populate CephClientConfigVars from THT
+    vars:
+      external_cluster_mon_ips: ''
+      tripleo_ceph_client_fsid: d1afcd63-9dac-4853-8920-bfe986d806df
+      tripleo_ceph_client_vars: '{{ playbook_dir }}/cephadm/ceph_client.yml'
+    when:
+    - ceph_input_vars.stat.exists == False
+    - external_cluster_mon_ips | length > 0
+  - include_role:
+      name: tripleo_ceph_client
+    name: configure ceph clients
+    vars:
+      tripleo_ceph_client_config_home: /var/lib/tripleo-config/ceph
+      tripleo_ceph_client_vars: '{{ playbook_dir }}/cephadm/ceph_client.yml'
+  - include_role:
+      name: tripleo_ceph_client
+    loop: '{{ ceph_external_multi_config }}'
+    name: tripleo client role
+    vars:
+      multiple: '{{ item }}'
+      tripleo_ceph_client_config_home: /var/lib/tripleo-config/ceph
+    when:
+    - ceph_external_multi_config is defined
+  - include_vars: '{{ playbook_dir }}/cephadm/cephadm-extra-vars-heat.yml'
+    name: Load variables for standalone ganesha
+    when:
+    - groups['ceph_mon'] | default([]) | length == 0
+    - groups['ceph_nfs'] | default([]) | length > 0
+  - include_role:
+      name: tripleo_cephadm
+      tasks_from: nfs
+    name: Config Standalone Ganesha
+    vars:
+      tripleo_cephadm_config_home: /var/lib/tripleo-config/ceph
+    when:
+    - groups['ceph_mon'] | default([]) | length == 0
+    - groups['ceph_nfs'] | default([]) | length > 0
+  name: Configure Ceph Clients
+  when: step|int == 2

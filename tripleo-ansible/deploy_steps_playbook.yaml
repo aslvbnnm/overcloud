@@ -1,0 +1,14 @@
+- import_playbook: deploy_steps_0_playbook.yaml
+- import_playbook: deploy_steps_selinux_playbook.yaml
+- import_playbook: deploy_steps_common_roles_playbook.yaml
+- import_playbook: deploy_steps_0_tasks_playbook.yaml
+- import_playbook: deploy_steps_pre_network_playbook.yaml
+- import_playbook: deploy_steps_network_deployments_playbook.yaml
+- import_playbook: deploy_steps_network_validation_playbook.yaml
+- import_playbook: deploy_steps_pre_deployment_playbook.yaml
+- import_playbook: deploy_steps_host_prep_playbook.yaml
+- import_playbook: deploy_steps_container_setup_tasks_playbook.yaml
+- import_playbook: deploy_steps_pre_deployment_tasks_playbook.yaml
+- import_playbook: deploy_steps_external_deployment_playbook.yaml
+- import_playbook: deploy_steps_post_deployment_playbook.yaml
+- import_playbook: deploy_steps_post_deploy_tasks_playbook.yaml

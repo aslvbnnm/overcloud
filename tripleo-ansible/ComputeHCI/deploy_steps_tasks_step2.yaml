@@ -1,0 +1,21 @@
+- block:
+  - copy:
+      content: "#!/bin/sh\ntmpwatch --nodirs \\\n  -X \"/var/log/containers/*/*log\"\
+        \ \\\n  -X \"/var/log/containers/*/*/*log\" \\\n  -X \"/var/log/containers/*/*err\"\
+        \ \\\n  {{ LogrotatePurgeAfterDays|int +1 }}d \\\n  /var/log/containers/ 2>&1\
+        \ | logger -t container-tmpwatch\n"
+      dest: /usr/local/sbin/containers-tmpwatch
+      group: root
+      mode: 493
+      owner: root
+    name: Push script
+    vars:
+      LogrotatePurgeAfterDays: '14'
+  - cron:
+      job: /usr/local/sbin/containers-tmpwatch
+      name: Remove old logs
+      special_time: daily
+      user: root
+    name: Insert cronjob in root crontab
+  name: configure tmpwatch on the host
+  when: step|int == 2

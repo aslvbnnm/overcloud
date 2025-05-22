@@ -1,0 +1,18 @@
+- include_role:
+    name: tuned
+  name: Configure tuned before reboot
+  vars:
+    tuned_isolated_cores: ''
+    tuned_profile: throughput-performance
+  when: step|int == 0
+- include_role:
+    name: tripleo_kernel
+    tasks_from: kernelargs.yml
+  name: Configure kernel args and reboot
+  vars:
+    tripleo_kernel_args: ''
+    tripleo_kernel_defer_reboot: false
+    tripleo_kernel_hugepages: {}
+    tripleo_kernel_hugepages_remove: false
+    tripleo_kernel_reboot_timeout: 900
+  when: step|int == 0

@@ -1,0 +1,38 @@
+- block:
+  - name: is additonal Cell?
+    set_fact:
+      nova_additional_cell: false
+  - block:
+    - name: discover via nova_manager?
+      set_fact:
+        nova_cellv2_discovery_container: nova_manager
+        nova_cellv2_discovery_delegate_host: '{{ groups[''nova_manager''][0] }}'
+      when:
+      - groups['nova_manager'] is defined and (groups['nova_manager']|length>0)
+    - name: discover via nova_api?
+      set_fact:
+        nova_cellv2_discovery_container: nova_api
+        nova_cellv2_discovery_delegate_host: '{{ groups[''nova_api''][0] }}'
+      when:
+      - nova_cellv2_discovery_delegate_host is not defined
+      - groups['nova_api'] is defined and (groups['nova_api']|length>0)
+    - fail:
+        msg: No hosts available to run nova cell_v2 host discovery.
+      ignore_errors: true
+      name: Warn if no discovery host available
+      when:
+      - nova_cellv2_discovery_delegate_host is not defined
+    - become: true
+      changed_when: false
+      command: '{{ container_cli }} exec {{ nova_cellv2_discovery_container }} nova-manage
+        cell_v2 discover_hosts --by-service'
+      delegate_to: '{{ nova_cellv2_discovery_delegate_host }}'
+      name: Discovering nova hosts
+      when:
+      - nova_cellv2_discovery_delegate_host is defined
+    - set_fact:
+        nova_cellv2_discovery_done: true
+    name: check if discover hosts is required
+    when:
+    - not nova_additional_cell|bool
+    - nova_cellv2_discovery_done is not defined

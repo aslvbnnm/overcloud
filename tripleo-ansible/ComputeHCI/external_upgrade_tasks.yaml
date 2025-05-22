@@ -1,0 +1,25 @@
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop logrotate container
+    vars:
+      tripleo_containers_to_stop:
+      - logrotate_crond
+      tripleo_delegate_to: '{{ groups[''logrotate_crond''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - include_role:
+      name: tripleo_persist
+      tasks_from: cleanup.yml
+    name: cleanup tripleo_persist
+  name: Clean up upgrade artifacts
+  tags:
+  - never
+  - system_upgrade_cleanup
+  when: step|int == 1

@@ -1,0 +1,258 @@
+
+heat_template_version: wallaby
+
+description: >
+  InternalApi network definition (automatically generated).
+
+parameters:
+  # the defaults here work for static IP assignment (IPAM) only
+  InternalApiNetCidr:
+    default: ""
+    description: Cidr for the internal_api network.
+    type: string
+  InternalApiNetValueSpecs:
+    default: {'provider:physical_network': 'internal_api', 'provider:network_type': 'flat'}
+    description: Value specs for the internal_api network.
+    type: json
+  InternalApiNetEnableDHCP:
+    default: false
+    description: Whether to enable DHCP on the associated subnet.
+    type: boolean
+  InternalApiNetAdminStateUp:
+    default: false
+    description: The admin state of the network.
+    type: boolean
+  InternalApiNetShared:
+    default: false
+    description: Whether this network is shared across all tenants.
+    type: boolean
+  InternalApiNetName:
+    default: internal_api
+    description: The name of the internal_api network.
+    type: string
+  InternalApiSubnetName:
+    default: internal_api_subnet
+    description: The name of the internal_api subnet in Neutron.
+    type: string
+  InternalApiAllocationPools:
+    default: []
+    description: Ip allocation pool range for the internal_api network.
+    type: json
+  InternalApiInterfaceDefaultRoute:
+    default: ""
+    description: default route for the internal_api network
+    type: string
+  InternalApiNetworkVlanID:
+    default: 1
+    description: Vlan ID for the internal_api network traffic.
+    type: number
+  InternalApiRoutes:
+    default: []
+    description: >
+      Routes for the internal_api network traffic.
+      JSON route e.g. [{'destination':'10.0.0.0/16', 'nexthop':'10.0.0.1'}]
+      Routes are added to the host_routes property on the subnet in neutron
+      when the network and subnet is created.
+    type: json
+  InternalApiMtu:
+    default: 1400
+    description: The maximum transmission unit (MTU) size(in bytes) that is
+      guaranteed to pass through the data path of the segments in the
+      InternalApi network.
+    type: number
+  InternalApiSubnetCidr_internal_api_subnet:
+    default: "172.16.2.0/24"
+    description: |
+      Cidr for the internal_api network's internal_api_subnet subnet.
+    type: string
+  InternalApiAllocationPools_internal_api_subnet:
+    default: [{'start': '172.16.2.10', 'end': '172.16.2.50'}]
+    description: |
+      Ip allocation pool range for the internal_api network's internal_api_subnet subnet.
+    type: json
+  InternalApiInterfaceDefaultRoute_internal_api_subnet:
+    default: "[]"
+    description: |
+       default route for the internal_api network's internal_api_subnet subnet.
+    type: string
+  InternalApiNetworkVlanID_internal_api_subnet:
+    default: 3802
+    description: |
+      Vlan ID for the internal_api network's internal_api_subnet subnet.
+    type: number
+  InternalApiRoutes_internal_api_subnet:
+    default: []
+    description: >
+      Routes for the internal_api_subnet subnet on internal_api network
+      traffic. JSON route e.g. [{'destination':'10.0.0.0/16', 'nexthop':'10.0.0.1'}]
+      Routes are added to the host_routes property on the subnet in neutron
+      when the subnet is created.
+    type: json
+  ManageNetworks:
+    default: true
+    type: boolean
+    description: >
+      Manage the network and related resources (subnets and segments) with
+      either create, update, or delete operations (depending on the stack
+      operation). Does not apply to ports which will always be managed as
+      needed. Defaults to true. For multi-stack use cases where the network
+      related resources have already been managed by a separate stack, this
+      parameter can be set to false.
+  CloudDomain:
+    default: 'localdomain'
+    type: string
+    description: >
+      The DNS domain used for the hosts. This must match the
+      overcloud_domain_name configured on the undercloud.
+  NetworkDeletionPolicy:
+    description: >
+      Whether to retain or delete network resource on deletion of the stack
+    type: string
+    default: delete
+    constraints:
+      - allowed_values: [delete, retain]
+
+
+conditions:
+  manage_networks: {get_param: ManageNetworks}
+  is_ipv6:
+    yaql:
+      expression: '":" in $.data'
+      data: {get_param: InternalApiNetCidr}
+
+resources:
+  InternalApiNetwork:
+    type: OS::Neutron::Net
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    properties:
+      admin_state_up: {get_param: InternalApiNetAdminStateUp}
+      name: {get_param: InternalApiNetName}
+      dns_domain:
+        list_join:
+          - '.'
+          - - internalapi
+            - {get_param: CloudDomain}
+            - ''
+      shared: {get_param: InternalApiNetShared}
+      value_specs:
+        map_merge:
+          - {get_param: InternalApiNetValueSpecs}
+          - {'mtu': {get_param: InternalApiMtu}}
+      tags:
+        - tripleo_net_idx=1
+        - tripleo_network_name=InternalApi
+        - tripleo_vip=True
+
+  InternalApiSubnet:
+    type: OS::Neutron::Subnet
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    properties:
+      cidr: {get_param: InternalApiNetCidr}
+      name: {get_param: InternalApiSubnetName}
+      network: {get_resource: InternalApiNetwork}
+      allocation_pools: {get_param: InternalApiAllocationPools}
+      gateway_ip: {get_param: InternalApiInterfaceDefaultRoute}
+      host_routes: {get_param: InternalApiRoutes}
+      # All networks have an implicit network segment when created, map this subnet to that segment.
+      segment: {get_attr: [InternalApiNetwork, segments, 0, id]}
+      ip_version: {if: [is_ipv6, 6, 4]}
+      enable_dhcp: {get_param: InternalApiNetEnableDHCP}
+      tags:
+        - str_replace:
+            template: tripleo_vlan_id=$vlan_id
+            params:
+              $vlan_id: {get_param: InternalApiNetworkVlanID}
+
+
+
+  InternalApiSegment_internal_api_subnet:
+    type: OS::Neutron::Segment
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    # NOTE(hjensas): Depends-On here to ensure we always create the base subnet
+    #   first. We can only set the segment for existing subnet if there is only
+    #   one segment and only one existing subnet on the network.
+    depends_on: InternalApiSubnet
+    properties:
+      name: internal_api_internal_api_subnet
+      network: {get_resource: InternalApiNetwork}
+      network_type: flat
+      physical_network: internal_api_internal_api_subnet
+
+  InternalApiSubnet_internal_api_subnet:
+    type: OS::Neutron::Subnet
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    properties:
+      cidr: {get_param: InternalApiSubnetCidr_internal_api_subnet}
+      name: internal_api_subnet
+      network: {get_resource: InternalApiNetwork}
+      allocation_pools: {get_param: InternalApiAllocationPools_internal_api_subnet}
+      gateway_ip: {get_param: InternalApiInterfaceDefaultRoute_internal_api_subnet}
+      host_routes: {get_param: InternalApiRoutes_internal_api_subnet}
+      segment: {get_resource: InternalApiSegment_internal_api_subnet}
+      ip_version: {if: [is_ipv6, 6, 4]}
+      enable_dhcp: {get_param: InternalApiNetEnableDHCP}
+      tags:
+        - str_replace:
+            template: tripleo_vlan_id=$vlan_id
+            params:
+              $vlan_id: {get_param: InternalApiNetworkVlanID_internal_api_subnet}
+
+
+
+outputs:
+  OS::stack_id:
+    description: internal_api network
+    value: {get_resource: InternalApiNetwork}
+  ip_version:
+    description: IP version of InternalApi network.
+    value: {if: [is_ipv6, 6, 4]}
+  network_cidrs:
+    description: List of InternalApi network's subnets in CIDR notation.
+    value:
+      if:
+        - manage_networks
+        - - {get_attr: [InternalApiSubnet, cidr]}
+          - {get_attr: [InternalApiSubnet_internal_api_subnet, cidr]}
+        - - {get_param: InternalApiNetCidr}
+          - {get_param: InternalApiSubnetCidr_internal_api_subnet}
+
+  network_attrs:
+    description: InternalApi network's attributes
+    value:
+      if:
+        - manage_networks
+        - {get_attr: [InternalApiNetwork, show]}
+        - name: internal_api
+          dns_domain:
+            list_join:
+            - '.'
+            - - internalapi
+              - {get_param: CloudDomain}
+              - ''
+          mtu: 1400
+
+  subnet_attrs:
+    description: Map of attributes for subnets in the InternalApi network
+    value:
+      if:
+        - manage_networks
+        - internal_api_subnet: {get_attr: [InternalApiSubnet, show]}
+          internal_api_subnet: {get_attr: [InternalApiSubnet_internal_api_subnet, show]}
+        - internal_api_subnet:
+            name: internal_api_subnet
+            cidr: {get_param: InternalApiNetCidr}
+            dns_nameservers: []
+            gateway_ip: {get_param: InternalApiInterfaceDefaultRoute}
+            host_routes: {get_param: InternalApiRoutes}
+            ip_version: {if: [is_ipv6, 6, 4]}
+          internal_api_subnet:
+            name: internal_api_subnet
+            cidr: {get_param: InternalApiSubnetCidr_internal_api_subnet}
+            dns_nameservers: []
+            gateway_ip: {get_param: InternalApiInterfaceDefaultRoute_internal_api_subnet}
+            host_routes: {get_param: InternalApiRoutes_internal_api_subnet}
+            ip_version: {if: [is_ipv6, 6, 4]}

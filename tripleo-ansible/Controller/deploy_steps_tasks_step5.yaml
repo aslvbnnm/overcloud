@@ -1,0 +1,113 @@
+- block:
+  - import_role:
+      name: tripleo_ha_wrapper
+    name: Cinder volume puppet bundle
+    vars:
+      tripleo_ha_wrapper_bundle_name: openstack-cinder-volume
+      tripleo_ha_wrapper_config_suffix: .cinder_volume_previous_run
+      tripleo_ha_wrapper_puppet_config_volume: cinder
+      tripleo_ha_wrapper_puppet_debug: false
+      tripleo_ha_wrapper_puppet_execute: include ::tripleo::profile::base::pacemaker;
+        include ::tripleo::profile::pacemaker::cinder::volume_bundle
+      tripleo_ha_wrapper_puppet_tags: pacemaker::resource::bundle,pacemaker::property,pacemaker::resource::ip,pacemaker::resource::ocf,pacemaker::constraint::order,pacemaker::constraint::colocation
+      tripleo_ha_wrapper_resource_name: openstack-cinder-volume
+      tripleo_ha_wrapper_resource_state: _ Started
+      tripleo_ha_wrapper_service_name: cinder_volume
+  name: Cinder Volume HA Wrappers Step
+  when: step|int == 5
+- containers.podman.podman_container_info:
+    name: nova_conductor
+  delay: 30
+  failed_when:
+  - nova_conductor_infos.containers.0.Healthcheck.Status is defined
+  - '''healthy'' not in nova_conductor_infos.containers.0.Healthcheck.Status'
+  name: validate nova-conductor container state
+  register: nova_conductor_infos
+  retries: 10
+  tags:
+  - opendev-validation
+  - opendev-validation-nova
+  when:
+  - container_cli == 'podman'
+  - not container_healthcheck_disabled
+  - step|int == 5
+- containers.podman.podman_container_info:
+    name: nova_metadata
+  delay: 30
+  failed_when:
+  - nova_metadata_infos.containers.0.Healthcheck.Status is defined
+  - '''healthy'' not in nova_metadata_infos.containers.0.Healthcheck.Status'
+  name: validate nova-metadata container state
+  register: nova_metadata_infos
+  retries: 10
+  tags:
+  - opendev-validation
+  - opendev-validation-nova
+  when:
+  - container_cli == 'podman'
+  - not container_healthcheck_disabled
+  - step|int == 5
+- containers.podman.podman_container_info:
+    name: nova_scheduler
+  delay: 30
+  failed_when:
+  - nova_scheduler_infos.containers.0.Healthcheck.Status is defined
+  - '''healthy'' not in nova_scheduler_infos.containers.0.Healthcheck.Status'
+  name: validate nova-scheduler container state
+  register: nova_scheduler_infos
+  retries: 10
+  tags:
+  - opendev-validation
+  - opendev-validation-nova
+  when:
+  - container_cli == 'podman'
+  - not container_healthcheck_disabled
+  - step|int == 5
+- containers.podman.podman_container_info:
+    name: nova_vnc_proxy
+  delay: 30
+  failed_when:
+  - nova_vnc_proxy_infos.containers.0.Healthcheck.Status is defined
+  - '''healthy'' not in nova_vnc_proxy_infos.containers.0.Healthcheck.Status'
+  name: validate nova-vnc-proxy container state
+  register: nova_vnc_proxy_infos
+  retries: 10
+  tags:
+  - opendev-validation
+  - opendev-validation-nova
+  when:
+  - container_cli == 'podman'
+  - not container_healthcheck_disabled
+  - step|int == 5
+- become: true
+  failed_when:
+  - kolla_set_configs_result.rc is defined
+  - kolla_set_configs_result.rc not in [0, 125]
+  name: Run kolla_set_configs to copy ring files
+  register: kolla_set_configs_result
+  shell: '{{ container_cli }} exec -u root {{ item }} /usr/local/bin/kolla_set_configs '
+  when: step|int == 5
+  with_items:
+  - swift_proxy
+- become: true
+  failed_when:
+  - kolla_set_configs_result.rc is defined
+  - kolla_set_configs_result.rc not in [0, 125]
+  name: Run kolla_set_configs to copy ring files
+  register: kolla_set_configs_result
+  shell: '{{ container_cli }} exec -u root {{ item }} /usr/local/bin/kolla_set_configs'
+  when: step|int == 5
+  with_items:
+  - swift_account_auditor
+  - swift_account_reaper
+  - swift_account_replicator
+  - swift_account_server
+  - swift_container_auditor
+  - swift_container_replicator
+  - swift_container_server
+  - swift_container_updater
+  - swift_object_auditor
+  - swift_object_expirer
+  - swift_object_replicator
+  - swift_object_server
+  - swift_object_updater

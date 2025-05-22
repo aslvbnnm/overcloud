@@ -1,0 +1,269 @@
+
+heat_template_version: wallaby
+
+description: >
+  Storage network definition (automatically generated).
+
+parameters:
+  # the defaults here work for static IP assignment (IPAM) only
+  StorageNetCidr:
+    default: ""
+    description: Cidr for the storage network.
+    type: string
+  StorageNetValueSpecs:
+    default: {'provider:physical_network': 'storage', 'provider:network_type': 'flat'}
+    description: Value specs for the storage network.
+    type: json
+  StorageNetEnableDHCP:
+    default: false
+    description: Whether to enable DHCP on the associated subnet.
+    type: boolean
+  StorageNetAdminStateUp:
+    default: false
+    description: The admin state of the network.
+    type: boolean
+  StorageNetShared:
+    default: false
+    description: Whether this network is shared across all tenants.
+    type: boolean
+  StorageNetName:
+    default: storage
+    description: The name of the storage network.
+    type: string
+  StorageSubnetName:
+    default: storage_subnet
+    description: The name of the storage subnet in Neutron.
+    type: string
+  StorageAllocationPools:
+    default: []
+    description: Ip allocation pool range for the storage network.
+    type: json
+  IPv6AddressMode:
+    default: dhcpv6-stateful
+    description: Neutron subnet IPv6 address mode
+    type: string
+  IPv6RAMode:
+    default: dhcpv6-stateful
+    description: Neutron subnet IPv6 router advertisement mode
+    type: string
+  StorageInterfaceDefaultRoute:
+    default: ""
+    description: default route for the storage network
+    type: string
+  StorageNetworkVlanID:
+    default: 1
+    description: Vlan ID for the storage network traffic.
+    type: number
+  StorageRoutes:
+    default: []
+    description: >
+      Routes for the storage network traffic.
+      JSON route e.g. [{'destination':'10.0.0.0/16', 'nexthop':'10.0.0.1'}]
+      Routes are added to the host_routes property on the subnet in neutron
+      when the network and subnet is created.
+    type: json
+  StorageMtu:
+    default: 1400
+    description: The maximum transmission unit (MTU) size(in bytes) that is
+      guaranteed to pass through the data path of the segments in the
+      Storage network.
+    type: number
+  StorageSubnetCidr_storage_subnet:
+    default: "172.16.4.0/24"
+    description: |
+      Cidr for the storage network's storage_subnet subnet.
+    type: string
+  StorageAllocationPools_storage_subnet:
+    default: [{'start': '172.16.4.10', 'end': '172.16.4.50'}]
+    description: |
+      Ip allocation pool range for the storage network's storage_subnet subnet.
+    type: json
+  StorageInterfaceDefaultRoute_storage_subnet:
+    default: "[]"
+    description: |
+       default route for the storage network's storage_subnet subnet.
+    type: string
+  StorageNetworkVlanID_storage_subnet:
+    default: 3804
+    description: |
+      Vlan ID for the storage network's storage_subnet subnet.
+    type: number
+  StorageRoutes_storage_subnet:
+    default: []
+    description: >
+      Routes for the storage_subnet subnet on storage network
+      traffic. JSON route e.g. [{'destination':'10.0.0.0/16', 'nexthop':'10.0.0.1'}]
+      Routes are added to the host_routes property on the subnet in neutron
+      when the subnet is created.
+    type: json
+  ManageNetworks:
+    default: true
+    type: boolean
+    description: >
+      Manage the network and related resources (subnets and segments) with
+      either create, update, or delete operations (depending on the stack
+      operation). Does not apply to ports which will always be managed as
+      needed. Defaults to true. For multi-stack use cases where the network
+      related resources have already been managed by a separate stack, this
+      parameter can be set to false.
+  CloudDomain:
+    default: 'localdomain'
+    type: string
+    description: >
+      The DNS domain used for the hosts. This must match the
+      overcloud_domain_name configured on the undercloud.
+  NetworkDeletionPolicy:
+    description: >
+      Whether to retain or delete network resource on deletion of the stack
+    type: string
+    default: delete
+    constraints:
+      - allowed_values: [delete, retain]
+
+
+conditions:
+  manage_networks: {get_param: ManageNetworks}
+  is_ipv6:
+    yaql:
+      expression: '":" in $.data'
+      data: {get_param: StorageNetCidr}
+
+resources:
+  StorageNetwork:
+    type: OS::Neutron::Net
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    properties:
+      admin_state_up: {get_param: StorageNetAdminStateUp}
+      name: {get_param: StorageNetName}
+      dns_domain:
+        list_join:
+          - '.'
+          - - storage
+            - {get_param: CloudDomain}
+            - ''
+      shared: {get_param: StorageNetShared}
+      value_specs:
+        map_merge:
+          - {get_param: StorageNetValueSpecs}
+          - {'mtu': {get_param: StorageMtu}}
+      tags:
+        - tripleo_net_idx=2
+        - tripleo_network_name=Storage
+        - tripleo_vip=True
+        - tripleo_ipv6=true
+
+  StorageSubnet:
+    type: OS::Neutron::Subnet
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    properties:
+      cidr: {get_param: StorageNetCidr}
+      name: {get_param: StorageSubnetName}
+      network: {get_resource: StorageNetwork}
+      allocation_pools: {get_param: StorageAllocationPools}
+      gateway_ip: {get_param: StorageInterfaceDefaultRoute}
+      host_routes: {get_param: StorageRoutes}
+      # All networks have an implicit network segment when created, map this subnet to that segment.
+      segment: {get_attr: [StorageNetwork, segments, 0, id]}
+      ip_version: {if: [is_ipv6, 6, 4]}
+      ipv6_address_mode: {get_param: IPv6AddressMode}
+      ipv6_ra_mode: {get_param: IPv6RAMode}
+      tags:
+        - str_replace:
+            template: tripleo_vlan_id=$vlan_id
+            params:
+              $vlan_id: {get_param: StorageNetworkVlanID}
+
+
+
+  StorageSegment_storage_subnet:
+    type: OS::Neutron::Segment
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    # NOTE(hjensas): Depends-On here to ensure we always create the base subnet
+    #   first. We can only set the segment for existing subnet if there is only
+    #   one segment and only one existing subnet on the network.
+    depends_on: StorageSubnet
+    properties:
+      name: storage_storage_subnet
+      network: {get_resource: StorageNetwork}
+      network_type: flat
+      physical_network: storage_storage_subnet
+
+  StorageSubnet_storage_subnet:
+    type: OS::Neutron::Subnet
+    deletion_policy: {get_param: NetworkDeletionPolicy}
+    condition: manage_networks
+    properties:
+      cidr: {get_param: StorageSubnetCidr_storage_subnet}
+      name: storage_subnet
+      network: {get_resource: StorageNetwork}
+      allocation_pools: {get_param: StorageAllocationPools_storage_subnet}
+      gateway_ip: {get_param: StorageInterfaceDefaultRoute_storage_subnet}
+      host_routes: {get_param: StorageRoutes_storage_subnet}
+      segment: {get_resource: StorageSegment_storage_subnet}
+      ip_version: {if: [is_ipv6, 6, 4]}
+      ipv6_address_mode: {get_param: IPv6AddressMode}
+      ipv6_ra_mode: {get_param: IPv6RAMode}
+      tags:
+        - str_replace:
+            template: tripleo_vlan_id=$vlan_id
+            params:
+              $vlan_id: {get_param: StorageNetworkVlanID_storage_subnet}
+
+
+
+outputs:
+  OS::stack_id:
+    description: storage network
+    value: {get_resource: StorageNetwork}
+  ip_version:
+    description: IP version of Storage network.
+    value: {if: [is_ipv6, 6, 4]}
+  network_cidrs:
+    description: List of Storage network's subnets in CIDR notation.
+    value:
+      if:
+        - manage_networks
+        - - {get_attr: [StorageSubnet, cidr]}
+          - {get_attr: [StorageSubnet_storage_subnet, cidr]}
+        - - {get_param: StorageNetCidr}
+          - {get_param: StorageSubnetCidr_storage_subnet}
+
+  network_attrs:
+    description: Storage network's attributes
+    value:
+      if:
+        - manage_networks
+        - {get_attr: [StorageNetwork, show]}
+        - name: storage
+          dns_domain:
+            list_join:
+            - '.'
+            - - storage
+              - {get_param: CloudDomain}
+              - ''
+          mtu: 1400
+
+  subnet_attrs:
+    description: Map of attributes for subnets in the Storage network
+    value:
+      if:
+        - manage_networks
+        - storage_subnet: {get_attr: [StorageSubnet, show]}
+          storage_subnet: {get_attr: [StorageSubnet_storage_subnet, show]}
+        - storage_subnet:
+            name: storage_subnet
+            cidr: {get_param: StorageNetCidr}
+            dns_nameservers: []
+            gateway_ip: {get_param: StorageInterfaceDefaultRoute}
+            host_routes: {get_param: StorageRoutes}
+            ip_version: {if: [is_ipv6, 6, 4]}
+          storage_subnet:
+            name: storage_subnet
+            cidr: {get_param: StorageSubnetCidr_storage_subnet}
+            dns_nameservers: []
+            gateway_ip: {get_param: StorageInterfaceDefaultRoute_storage_subnet}
+            host_routes: {get_param: StorageRoutes_storage_subnet}
+            ip_version: {if: [is_ipv6, 6, 4]}

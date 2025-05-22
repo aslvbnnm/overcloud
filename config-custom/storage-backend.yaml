@@ -1,0 +1,53 @@
+resource_registry:
+  OS::TripleO::Services::CephMgr: deployment/cephadm/ceph-mgr.yaml
+  OS::TripleO::Services::CephMon: deployment/cephadm/ceph-mon.yaml
+  OS::TripleO::Services::CephOSD: deployment/cephadm/ceph-osd.yaml
+  OS::TripleO::Services::CephClient: deployment/cephadm/ceph-client.yaml
+
+parameter_defaults:
+  CephDynamicSpec: true
+  CephSpecFqdn: true
+  CephConfigOverrides:
+    rgw_swift_enforce_content_length: true
+    rgw_swift_versioning_enabled: true
+    osd:
+      osd_memory_target_autotune: true
+      osd_numa_auto_affinity: true
+    mgr:
+      mgr/cephadm/autotune_memory_target_ratio: 0.2
+  CinderEnableIscsiBackend: false
+  CinderEnableRbdBackend: true
+  CinderBackupBackend: ceph
+  CinderEnableNfsBackend: false
+  NovaEnableRbdBackend: true
+  GlanceBackend: rbd
+  CinderRbdPoolName: "volumes"
+  NovaRbdPoolName: "vms"
+  GlanceRbdPoolName: "images"
+  CephPoolDefaultPgNum: 32
+  CephPoolDefaultSize: 2
+
+  # needed for now because of the repo used to create tripleo-deploy image
+#  CephAnsibleRepo: "rhelosp-ceph-4-tools"
+#  CephAnsiblePlaybookVerbosity: 3
+#  CinderEnableIscsiBackend: false
+#  CinderEnableRbdBackend: true
+#  CinderBackupBackend: ceph
+#  CinderEnableNfsBackend: false
+#  NovaEnableRbdBackend: true
+#  GlanceBackend: rbd
+#  CinderRbdPoolName: "volumes"
+#  NovaRbdPoolName: "vms"
+#  GlanceRbdPoolName: "images"
+#  CephPoolDefaultPgNum: 32
+#  CephPoolDefaultSize: 2
+#  CephAnsibleDisksConfig:
+#    devices:
+#      - '/dev/vdb'
+#    osd_scenario: lvm
+#    osd_objectstore: bluestore
+#  CephAnsibleExtraConfig:
+#    is_hci: true
+#  CephConfigOverrides:
+#    rgw_swift_enforce_content_length: true
+#    rgw_swift_versioning_enabled: true

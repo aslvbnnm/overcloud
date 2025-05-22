@@ -1,0 +1,752 @@
+ContainerIscsidConfigImage: registry.redhat.io/rhosp-rhel9/openstack-iscsid:17.1.6
+ContainerIscsidImage: registry.redhat.io/rhosp-rhel9/openstack-iscsid:17.1.6
+ansible_async_dir: /tmp/.ansible_async
+any_errors_fatal: 'True'
+bond_interface_ovs_options: ''
+chrony_acl_rules:
+- deny all
+chrony_global_pool_settings: iburst minpoll 6 maxpoll 10
+chrony_global_server_settings: iburst minpoll 6 maxpoll 10
+chrony_manage_package: true
+chrony_ntp_pools: []
+chrony_ntp_servers:
+- 0.rhel.pool.ntp.org
+chrony_role_action: all
+ctlplane_dns_nameservers:
+- 192.168.131.20
+ctlplane_gateway_ip: null
+ctlplane_host_routes:
+- default: true
+  next_hop: null
+ctlplane_mtu: 1400
+ctlplane_subnet_cidr: '24'
+default_route_networks:
+- ControlPlane
+deployed_server_port_map:
+  computehci-0-ctlplane:
+    fixed_ips:
+    - ip_address: 172.16.1.15
+  computehci-1-ctlplane:
+    fixed_ips:
+    - ip_address: 172.16.1.16
+  controller-0-ctlplane:
+    fixed_ips:
+    - ip_address: 172.16.1.12
+  controller-1-ctlplane:
+    fixed_ips:
+    - ip_address: 172.16.1.13
+  controller-2-ctlplane:
+    fixed_ips:
+    - ip_address: 172.16.1.14
+dns_search_domains: []
+external_mtu: 1500
+extraconfig: {}
+hieradata_files:
+- '%{::uuid}'
+- fqdn
+- docker_puppet
+- ansible_managed
+- heat_config_%{::deploy_config_name}
+- config_step
+- role_extraconfig
+- extraconfig
+- pci_passthrough_whitelist
+- service_names
+- service_configs
+- cloud_domain
+- bootstrap_node
+- all_nodes
+- vip_data
+- net_ip_map
+- ovn_chassis_mac_map
+- '%{::osfamily}'
+- neutron_bigswitch_data
+- upgrade
+hieradata_localhost_address: localhost
+internal_api_cidr: '24'
+internal_api_gateway_ip: null
+internal_api_host_routes: []
+internal_api_mtu: 1400
+internal_api_vlan_id: 3802
+local_mtu: 1500
+max_fail_percentage: 0
+network_cidrs:
+  InternalApi_cidr: '24'
+  StorageMgmt_cidr: '24'
+  Storage_cidr: '24'
+  Tenant_cidr: '24'
+network_config_update: false
+networks_all:
+- External
+- InternalApi
+- Storage
+- StorageMgmt
+- Tenant
+networks_lower:
+  External: external
+  InternalApi: internal_api
+  Storage: storage
+  StorageMgmt: storage_mgmt
+  Tenant: tenant
+networks_skip_config: []
+neutron_physical_bridge_name: br-ex
+neutron_public_interface_name: nic3
+role_extraconfig:
+  tripleo::profile::base::metrics::collectd::sensubility::subscriptions:
+  - overcloud-nova-compute
+  - overcloud-nova-libvirt
+  - overcloud-ovn-metadata
+  tripleo_collectd_sensubility_subscriptions:
+  - overcloud-nova-compute
+  - overcloud-nova-libvirt
+  - overcloud-ovn-metadata
+role_networks:
+- InternalApi
+- Storage
+- StorageMgmt
+- Tenant
+role_tags:
+- compute
+service_configs:
+  ContainerNovaComputeImage: registry.redhat.io/rhosp-rhel9/openstack-nova-compute:17.1.6
+  ContainerNovaLibvirtConfigImage: registry.redhat.io/rhosp-rhel9/openstack-nova-libvirt:17.1.6
+  ContainerNovaLibvirtImage: registry.redhat.io/rhosp-rhel9/openstack-nova-libvirt:17.1.6
+  ContainerOvnControllerConfigImage: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+  ContainerOvnControllerImage: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+  cold_migration_ssh_inbound_addr: '%{hiera(''internal_api'')}'
+  compute_disable_irqbalance: false
+  compute_enable_ksm: false
+  container_cpuset_cpus: ''
+  live_migration_ssh_inbound_addr: '%{hiera(''internal_api'')}'
+  memcached_authtoken_port: 11211
+  memcached_port: 11211
+  neutron::agents::ovn_metadata::auth_password: wgl94qxjvp5xr49xk2c5q7cjn
+  neutron::agents::ovn_metadata::auth_tenant: service
+  neutron::agents::ovn_metadata::auth_url: http://172.16.2.10:5000
+  neutron::agents::ovn_metadata::debug: false
+  neutron::agents::ovn_metadata::hwol_qos_enabled: false
+  neutron::agents::ovn_metadata::metadata_host: 172.16.2.10
+  neutron::agents::ovn_metadata::metadata_protocol: http
+  neutron::agents::ovn_metadata::ovsdb_connection_timeout: 180
+  neutron::agents::ovn_metadata::ovsdb_probe_interval: 60000
+  neutron::agents::ovn_metadata::shared_secret: k7lhh4tfkbmk2pbcqf2ql8pbz
+  neutron::allow_overlapping_ips: true
+  neutron::core_plugin: ml2
+  neutron::db::database_db_max_retries: -1
+  neutron::db::database_max_retries: -1
+  neutron::db::sync::db_sync_timeout: 300
+  neutron::db::sync::extra_params: ''
+  neutron::dhcp_agent_notification: false
+  neutron::dns_domain: openstacklocal
+  neutron::global_physnet_mtu: 1500
+  neutron::host: '%{hiera(''fqdn_canonical'')}'
+  neutron::logging::debug: false
+  neutron::notification_driver:
+  - noop
+  neutron::purge_config: false
+  neutron::rabbit_heartbeat_in_pthread: false
+  neutron::rabbit_heartbeat_timeout_threshold: 60
+  neutron::report_interval: 300
+  neutron::service_plugins:
+  - qos
+  - ovn-router
+  - trunk
+  - segments
+  - port_forwarding
+  - log
+  neutron::vlan_transparent: false
+  nfs_backend_enable: false
+  nfs_options: context=system_u:object_r:nfs_t:s0
+  nfs_share: ''
+  nfs_vers: '4.2'
+  nova::cache::backend: dogpile.cache.memcached
+  nova::cache::enabled: true
+  nova::cache::tls_enabled: false
+  nova::cinder::auth_type: v3password
+  nova::cinder::auth_url: http://172.16.2.10:5000/v3
+  nova::cinder::password: 6hlkcpd9x7kl7thpsq5lxk2tx
+  nova::cinder::project_name: service
+  nova::cinder::region_name: regionOne
+  nova::cinder::username: cinder
+  nova::cinder_catalog_info: volumev3:cinderv3:internalURL
+  nova::compute::consecutive_build_service_disable_threshold: '10'
+  nova::compute::cpu_dedicated_set: []
+  nova::compute::cpu_shared_set: []
+  nova::compute::force_raw_images: true
+  nova::compute::image_cache::manager_interval: 2400
+  nova::compute::image_cache::precache_concurrency: 1
+  nova::compute::image_cache::remove_unused_base_images: true
+  nova::compute::image_cache::remove_unused_original_minimum_age_seconds: 86400
+  nova::compute::image_cache::remove_unused_resized_minimum_age_seconds: 3600
+  nova::compute::image_type_exclude_list: []
+  nova::compute::instance_usage_audit: true
+  nova::compute::instance_usage_audit_period: hour
+  nova::compute::libvirt::cpu_mode: host-model
+  nova::compute::libvirt::cpu_model_extra_flags: ''
+  nova::compute::libvirt::cpu_models: []
+  nova::compute::libvirt::enabled_perf_events: []
+  nova::compute::libvirt::file_backed_memory: 0
+  nova::compute::libvirt::hw_machine_type: x86_64=pc-q35-rhel9.0.0
+  nova::compute::libvirt::log_filters: 1:libvirt 1:qemu 1:conf 1:security 3:event
+    3:json 3:file 3:object 1:util
+  nova::compute::libvirt::log_outputs: 3:file:/var/log/libvirt/libvirtd.log
+  nova::compute::libvirt::manage_libvirt_services: false
+  nova::compute::libvirt::mem_stats_period_seconds: 10
+  nova::compute::libvirt::migration_support: false
+  nova::compute::libvirt::modular_libvirt: true
+  nova::compute::libvirt::num_pcie_ports: 16
+  nova::compute::libvirt::pmem_namespaces: ''
+  nova::compute::libvirt::preallocate_images: none
+  nova::compute::libvirt::qemu::configure_qemu: true
+  nova::compute::libvirt::qemu::max_files: 32768
+  nova::compute::libvirt::qemu::max_processes: 131072
+  nova::compute::libvirt::qemu::memory_backing_dir: ''
+  nova::compute::libvirt::rx_queue_size: 512
+  nova::compute::libvirt::services::libvirt_virt_type: kvm
+  nova::compute::libvirt::services::modular_libvirt: true
+  nova::compute::libvirt::swtpm_enabled: false
+  nova::compute::libvirt::tx_queue_size: 512
+  nova::compute::libvirt::virt_type: kvm
+  nova::compute::libvirt::virtlogd::log_filters: 1:logging 4:object 4:json 4:event
+    1:util
+  nova::compute::libvirt::virtlogd::log_outputs: 3:file:/var/log/libvirt/virtlogd.log
+  nova::compute::libvirt::virtnodedevd::log_filters: 1:qemu 1:libvirt 4:object 4:json
+    4:event 1:util
+  nova::compute::libvirt::virtnodedevd::log_outputs: 3:file:/var/log/libvirt/virtnodedevd.log
+  nova::compute::libvirt::virtproxyd::log_filters: 1:qemu 1:libvirt 4:object 4:json
+    4:event 1:util
+  nova::compute::libvirt::virtproxyd::log_outputs: 3:file:/var/log/libvirt/virtproxyd.log
+  nova::compute::libvirt::virtqemud::log_filters: 1:qemu 1:libvirt 4:object 4:json
+    4:event 1:util
+  nova::compute::libvirt::virtqemud::log_outputs: 3:file:/var/log/libvirt/virtqemud.log
+  nova::compute::libvirt::virtsecretd::log_filters: 1:qemu 1:libvirt 4:object 4:json
+    4:event 1:util
+  nova::compute::libvirt::virtsecretd::log_outputs: 3:file:/var/log/libvirt/virtsecretd.log
+  nova::compute::libvirt::virtstoraged::log_filters: 1:qemu 1:libvirt 4:object 4:json
+    4:event 1:util
+  nova::compute::libvirt::virtstoraged::log_outputs: 3:file:/var/log/libvirt/virtstoraged.log
+  nova::compute::libvirt::vncserver_listen: '%{hiera(''internal_api'')}'
+  nova::compute::libvirt::volume_use_multipath: false
+  nova::compute::libvirt_guests::shutdown_timeout: '300'
+  nova::compute::live_migration_wait_for_vif_plug: true
+  nova::compute::max_disk_devices_to_attach: -1
+  nova::compute::mkisofs_cmd: mkisofs
+  nova::compute::neutron_physnets_numa_nodes_mapping: {}
+  nova::compute::neutron_tunnel_numa_nodes: []
+  nova::compute::pci::passthrough: ''
+  nova::compute::provider::custom_inventories: {}
+  nova::compute::rbd::ephemeral_storage: true
+  nova::compute::rbd::libvirt_images_rbd_ceph_conf: /etc/ceph/ceph.conf
+  nova::compute::rbd::libvirt_images_rbd_glance_copy_poll_interval: 15
+  nova::compute::rbd::libvirt_images_rbd_glance_copy_timeout: 600
+  nova::compute::rbd::libvirt_images_rbd_glance_store_name: default_backend
+  nova::compute::rbd::libvirt_images_rbd_pool: vms
+  nova::compute::rbd::libvirt_rbd_secret_key: AQCxIS5oAAAAABAACAcGBwcHAwQHBwMDAAEDCQ==
+  nova::compute::rbd::libvirt_rbd_secret_uuid: d1afcd63-9dac-4853-8920-bfe986d806df
+  nova::compute::rbd::libvirt_rbd_user: openstack
+  nova::compute::rbd::rbd_keyring: client.openstack
+  nova::compute::reserved_host_memory: 4096
+  nova::compute::reserved_huge_pages: []
+  nova::compute::resume_guests_state_on_host_boot: false
+  nova::compute::sync_power_state_interval: 600
+  nova::compute::use_cow_images: true
+  nova::compute::vcpu_pin_set: []
+  nova::compute::verify_glance_signatures: false
+  nova::compute::vgpu::vgpu_types_device_addresses_mapping: {}
+  nova::compute::vncproxy_host: 192.168.131.60
+  nova::compute::vncserver_proxyclient_address: '%{hiera(''internal_api'')}'
+  nova::cpu_allocation_ratio: 0.0
+  nova::cross_az_attach: true
+  nova::db::database_db_max_retries: -1
+  nova::db::database_max_retries: -1
+  nova::dhcp_domain: ''
+  nova::disk_allocation_ratio: 0.0
+  nova::glance::valid_interfaces: internal
+  nova::host: '%{hiera(''fqdn_canonical'')}'
+  nova::keystone::service_user::auth_url: http://172.16.2.10:5000
+  nova::keystone::service_user::password: l8mtl7kxvm55px2l5nd8bbkmd
+  nova::keystone::service_user::project_name: service
+  nova::keystone::service_user::region_name: regionOne
+  nova::keystone::service_user::send_service_user_token: true
+  nova::logging::debug: false
+  nova::migration::libvirt::live_migration_inbound_addr: '%{hiera(''fqdn_internal_api'')}'
+  nova::migration::libvirt::live_migration_permit_auto_converge: true
+  nova::migration::libvirt::live_migration_permit_post_copy: true
+  nova::migration::libvirt::live_migration_tunnelled: false
+  nova::migration::libvirt::modular_libvirt: true
+  nova::migration::qemu::configure_qemu: true
+  nova::migration::qemu::migration_port_max: 61215
+  nova::migration::qemu::migration_port_min: 61152
+  nova::my_ip: '%{hiera(''internal_api'')}'
+  nova::network::neutron::auth_type: v3password
+  nova::network::neutron::auth_url: http://172.16.2.10:5000/v3
+  nova::network::neutron::ovs_bridge: br-int
+  nova::network::neutron::password: wgl94qxjvp5xr49xk2c5q7cjn
+  nova::network::neutron::project_name: service
+  nova::network::neutron::region_name: regionOne
+  nova::network::neutron::username: neutron
+  nova::network::neutron::valid_interfaces: internal
+  nova::notification_driver:
+  - noop
+  nova::notification_format: unversioned
+  nova::notify_on_state_change: vm_and_task_state
+  nova::os_region_name: regionOne
+  nova::ovsdb_connection: ''
+  nova::placement::auth_url: http://172.16.2.10:5000
+  nova::placement::password: q858cqz76262h4rgnbtx4glsn
+  nova::placement::project_name: service
+  nova::placement::region_name: regionOne
+  nova::placement::valid_interfaces: internal
+  nova::purge_config: false
+  nova::rabbit_heartbeat_in_pthread: false
+  nova::rabbit_heartbeat_timeout_threshold: 60
+  nova::rabbit_use_ssl: 'False'
+  nova::ram_allocation_ratio: 1.0
+  nova::vncproxy::common::vncproxy_host: 192.168.131.60
+  nova::vncproxy::common::vncproxy_port: '6080'
+  nova::vncproxy::common::vncproxy_protocol: http
+  nova::workarounds::disable_compute_service_check_for_ffu: false
+  nova::workarounds::never_download_image_if_on_rbd: false
+  nova_compute_opt_env_vars: {}
+  nova_compute_opt_volumes: []
+  nova_compute_startup_delay: 180
+  nova_glance_enable_rbd_download: false
+  nova_glance_rbd_download_multistore_id: ''
+  nova_is_additional_cell: false
+  nova_libvirt_max_queues: 0
+  nova_libvirt_opt_volumes: []
+  nova_permit_auto_converge: true
+  nova_permit_post_copy: true
+  nova_pmem_namespaces: ''
+  oslo_messaging_notify_password: n6xpt9jjfh8l2dxfkn9srxdsf
+  oslo_messaging_notify_port: 5672
+  oslo_messaging_notify_scheme: rabbit
+  oslo_messaging_notify_use_ssl: 'False'
+  oslo_messaging_notify_user_name: guest
+  oslo_messaging_rpc_password: n6xpt9jjfh8l2dxfkn9srxdsf
+  oslo_messaging_rpc_port: 5672
+  oslo_messaging_rpc_scheme: rabbit
+  oslo_messaging_rpc_use_ssl: 'False'
+  oslo_messaging_rpc_user_name: guest
+  ovn::controller::hostname: '%{hiera(''fqdn_canonical'')}'
+  ovn::controller::ovn_bridge: br-int
+  ovn::controller::ovn_bridge_mappings:
+  - datacentre:br-ex
+  ovn::controller::ovn_cms_options: ''
+  ovn::controller::ovn_encap_ip: '%{hiera(''tenant'')}'
+  ovn::controller::ovn_encap_tos: '0'
+  ovn::controller::ovn_encap_type: geneve
+  ovn::controller::ovn_monitor_all: true
+  ovn::controller::ovn_ofctrl_wait_before_clear: 8000
+  ovn::controller::ovn_openflow_probe_interval: 60
+  ovn::controller::ovn_remote_probe_interval: 60000
+  ovn::northbound::port: 6641
+  ovn::southbound::port: 6642
+  ovn_db_clustered: true
+  rbd_disk_cachemodes:
+  - network=writeback
+  rbd_persistent_storage: true
+  resume_guests_state_on_host_boot: false
+  snmp::agentaddress:
+  - udp:161
+  - udp6:[::1]:161
+  snmp::snmpd_options: -LS0-5d
+  tripleo::firewall::manage_firewall: false
+  tripleo::firewall::purge_firewall_rules: false
+  tripleo::packages::enable_install: true
+  tripleo::profile::base::database::mysql::client::enable_ssl: false
+  tripleo::profile::base::database::mysql::client::mysql_client_bind_address: '%{hiera(''internal_api'')}'
+  tripleo::profile::base::database::mysql::client::ssl_ca: /etc/ipa/ca.crt
+  tripleo::profile::base::iscsid::chap_algs: SHA3-256,SHA256,SHA1,MD5
+  tripleo::profile::base::logging::logrotate::dateext: false
+  tripleo::profile::base::logging::logrotate::maxsize: 10M
+  tripleo::profile::base::logging::logrotate::purge_after_days: '14'
+  tripleo::profile::base::logging::logrotate::rotate: '14'
+  tripleo::profile::base::logging::logrotate::rotation: daily
+  tripleo::profile::base::neutron::container_cli: podman
+  tripleo::profile::base::neutron::ovn_metadata_agent_wrappers::debug: false
+  tripleo::profile::base::neutron::ovn_metadata_agent_wrappers::enable_haproxy_wrapper: true
+  tripleo::profile::base::neutron::ovn_metadata_agent_wrappers::haproxy_image: registry.redhat.io/rhosp-rhel9/openstack-neutron-metadata-agent-ovn:17.1.6
+  tripleo::profile::base::neutron::ovn_metadata_agent_wrappers::haproxy_process_wrapper: /var/lib/neutron/ovn_metadata_haproxy_wrapper
+  tripleo::profile::base::nova::compute::cinder_nfs_backend: false
+  tripleo::profile::base::nova::compute::libvirt_guests::enabled: false
+  tripleo::profile::base::nova::compute::nova_nfs_enabled: false
+  tripleo::profile::base::nova::compute_libvirt_shared::nova_rbd_ceph_conf_path: /var/lib/tripleo-config/ceph
+  tripleo::profile::base::nova::libvirt::modular_libvirt: true
+  tripleo::profile::base::nova::migration::client::libvirt_enabled: true
+  tripleo::profile::base::nova::migration::client::nova_compute_enabled: true
+  tripleo::profile::base::nova::migration::client::ssh_port: 2022
+  tripleo::profile::base::nova::migration::client::ssh_private_key: '-----BEGIN RSA
+    PRIVATE KEY-----
+
+    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
+
+    -----END RSA PRIVATE KEY-----
+
+    '
+  tripleo::profile::base::nova::migration::target::ssh_authorized_keys:
+  - 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDdZr7AfihYVzu78B50jZnPpZ7reqd004krwf4v8PA9QfuntkwVrSi7XaeQ6QoI2kXs3HDG1AgCqWhdfKcF336ccgsCQBZhXmnAmCwSa8HCzpmaQWRdXelxV58+Uc9hqmeSj0FKqWbtqaWd4jePAft0V7qhaj0OMK3S7SqRT8AccfVYyZ4osrfz3/fvSpGr8YwNIlwgvH5VFW4JXelBTBlvhDCfvbrOiNc+6Xe9sTqtYTESOHsfdrzaGl4DWyM53hJGHjclXV/7LCkeViLnZKOz5PTLnUig00FH1LjtPfW8RC3OabONNpJZAJGzpV98Izw+tJyd9RWv52nBg5pH5+y2GtAnPm9ENycKyitO/UApN5hNgiM+Za1SD75jWPH9VNR4H7fFAVRSS1zaQNIAURgZAf5+rgaAgOWPtbrWldyMUke+tE7Gcj4T/JZDbgojU8pJreSH1w+fMjDsObqpo+f7zx98pETqfnzAZN0fMpqUVgy4aP0wcgMVNDb7U6T2uKFz9ciAtIlTI3MXr3uk02WiM0LnggW/cNshIuExpiziFkBQOyb+eyw7bmlvQAW1i3rkn7AgTeuGFUjG+/WGUbv2VSlIN61HJgCPBb9xICcpV6E/ZcC24cBuSp5o5DO8d9MM2MOEtgI3xgNrnRrV62UeNvXlErQnoo+joJuFjQV6fw==
+
+    '
+  tripleo::profile::base::nova::migration::target::ssh_localaddrs:
+  - '%{hiera(''cold_migration_ssh_inbound_addr'')}'
+  - '%{hiera(''live_migration_ssh_inbound_addr'')}'
+  tripleo::profile::base::nova::virtlogd_wrapper::debug: false
+  tripleo::profile::base::nova::virtlogd_wrapper::enable_wrapper: true
+  tripleo::profile::base::nova::virtlogd_wrapper::virtlogd_image: registry.redhat.io/rhosp-rhel9/openstack-nova-libvirt:17.1.6
+  tripleo::profile::base::nova::virtlogd_wrapper::virtlogd_process_wrapper: /var/lib/container-config-scripts/virtlogd_wrapper
+  tripleo::profile::base::snmp::snmpd_password: k5cdhvgf9gv9cdldrpqvswnd
+  tripleo::profile::base::snmp::snmpd_user: ro_snmp_user
+  tripleo::profile::base::sshd::bannertext: ''
+  tripleo::profile::base::sshd::motd: ''
+  tripleo::profile::base::sshd::options:
+    AcceptEnv:
+    - LANG LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES
+    - LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT
+    - LC_IDENTIFICATION LC_ALL LANGUAGE
+    - XMODIFIERS
+    AuthorizedKeysFile: .ssh/authorized_keys
+    ChallengeResponseAuthentication: 'no'
+    GSSAPIAuthentication: 'no'
+    GSSAPICleanupCredentials: 'no'
+    HostKey:
+    - /etc/ssh/ssh_host_rsa_key
+    - /etc/ssh/ssh_host_ecdsa_key
+    - /etc/ssh/ssh_host_ed25519_key
+    Subsystem: sftp  /usr/libexec/openssh/sftp-server
+    SyslogFacility: AUTHPRIV
+    UseDNS: 'no'
+    UsePAM: 'yes'
+    X11Forwarding: 'yes'
+  tripleo::profile::base::sshd::password_authentication: 'no'
+  tripleo::profile::base::sshd::port:
+  - 22
+  tripleo::trusted_cas::ca_map: {}
+  vhostuser_socket_group: qemu
+  vswitch::ovs::enable_hw_offload: false
+service_metadata_settings: null
+service_names:
+- boot_params_service
+- ca_certs
+- ceph_client
+- ceph_osd
+- iscsid
+- kernel
+- mysql_client
+- nova_compute
+- nova_libvirt
+- nova_libvirt_guests
+- nova_migration_target
+- logrotate_crond
+- podman
+- snmp
+- sshd
+- chrony
+- timezone
+- tripleo_firewall
+- tripleo_packages
+- tuned
+- ovn_controller
+- ovn_metadata
+storage_cidr: '24'
+storage_gateway_ip: null
+storage_host_routes: []
+storage_mgmt_cidr: '24'
+storage_mgmt_gateway_ip: null
+storage_mgmt_host_routes: []
+storage_mgmt_mtu: 1400
+storage_mgmt_vlan_id: 3805
+storage_mtu: 1400
+storage_vlan_id: 3804
+tenant_cidr: '24'
+tenant_gateway_ip: null
+tenant_host_routes: []
+tenant_mtu: 1400
+tenant_vlan_id: 3803
+tripleo_firewall_edge_frontend_rules: {}
+tripleo_firewall_edge_ssl_frontend_rules: {}
+tripleo_firewall_frontend_rules:
+  100 cinder_haproxy_frontend:
+    dport:
+    - 8776
+  100 glance_api_haproxy_frontend:
+    dport:
+    - 9292
+  100 glance_api_internal_haproxy_frontend:
+    dport:
+    - '9293'
+  100 heat_api_cfn_haproxy_frontend:
+    dport:
+    - 8000
+  100 heat_api_haproxy_frontend:
+    dport:
+    - 8004
+  100 horizon_haproxy_frontend:
+    dport:
+    - 80
+  100 keystone_admin_haproxy_frontend:
+    dport:
+    - '35357'
+  100 keystone_public_haproxy_frontend:
+    dport:
+    - 5000
+  100 mysql_haproxy:
+    dport:
+    - 3306
+  100 neutron_haproxy_frontend:
+    dport:
+    - 9696
+  100 nova_metadatahaproxy_frontend:
+    dport:
+    - 8775
+  100 nova_osapi_haproxy_frontend:
+    dport:
+    - 8774
+  100 nova_vncproxy_haproxy_frontend:
+    dport:
+    - 6080
+  100 placement_haproxy_frontend:
+    dport:
+    - 8778
+  100 swift_proxy_server_haproxy_frontend:
+    dport:
+    - 8080
+tripleo_firewall_rules:
+  003 accept ssh from all:
+    dport: 22
+    extras:
+      ensure: absent
+    proto: tcp
+  003 accept ssh from ctlplane subnet 172.16.1.0/24:
+    dport: 22
+    proto: tcp
+    source: 172.16.1.0/24
+  105 ntp:
+    dport: 123
+    proto: udp
+  111 ceph_osd:
+    dport:
+    - 6800-7300
+  113 nova_migration_target accept api subnet 172.16.2.0/24:
+    dport: 2022
+    proto: tcp
+    source: 172.16.2.0/24
+  113 nova_migration_target accept libvirt subnet 172.16.2.0/24:
+    dport: 2022
+    proto: tcp
+    source: 172.16.2.0/24
+  118 neutron vxlan networks:
+    dport: 4789
+    proto: udp
+  119 neutron geneve networks:
+    dport: 6081
+    proto: udp
+  120 neutron geneve networks no conntrack:
+    action: append
+    chain: OUTPUT
+    dport: 6081
+    jump: NOTRACK
+    proto: udp
+    state: []
+    table: raw
+  121 neutron geneve networks no conntrack:
+    action: append
+    chain: PREROUTING
+    dport: 6081
+    jump: NOTRACK
+    proto: udp
+    state: []
+    table: raw
+  124 snmp 172.16.1.0/24:
+    dport: 161
+    proto: udp
+    source: 172.16.1.0/24
+  200 nova_libvirt:
+    dport:
+    - 16514
+    - 61152-61215
+    - 5900-6923
+tripleo_firewall_ssl_frontend_rules:
+  100 cinder_haproxy_frontend_ssl:
+    dport:
+    - 13776
+  100 glance_api_haproxy_frontend_ssl:
+    dport:
+    - 13292
+  100 heat_api_cfn_haproxy_frontend_ssl:
+    dport:
+    - 13005
+  100 heat_api_haproxy_frontend_ssl:
+    dport:
+    - 13004
+  100 horizon_haproxy_frontend_ssl:
+    dport:
+    - 443
+  100 keystone_public_haproxy_frontend_ssl:
+    dport:
+    - 13000
+  100 neutron_haproxy_frontend_ssl:
+    dport:
+    - 13696
+  100 nova_metadatahaproxy_frontend_ssl:
+    dport:
+    - 13775
+  100 nova_osapi_haproxy_frontend_ssl:
+    dport:
+    - 13774
+  100 nova_vncproxy_haproxy_frontend_ssl:
+    dport:
+    - 13080
+  100 placement_haproxy_frontend_ssl:
+    dport:
+    - 13778
+  100 swift_proxy_server_haproxy_frontend_ssl:
+    dport:
+    - 13808
+tripleo_kernel_extra_modules: {}
+tripleo_kernel_extra_packages: {}
+tripleo_kernel_sysctl_extra_settings:
+  fs.aio-max-nr:
+    value: 1048576
+  fs.inotify.max_user_instances:
+    value: 1024
+  kernel.pid_max:
+    value: 1048576
+  net.bridge.bridge-nf-call-arptables:
+    value: 1
+  net.bridge.bridge-nf-call-ip6tables:
+    value: 1
+  net.bridge.bridge-nf-call-iptables:
+    value: 1
+  net.ipv4.conf.all.rp_filter:
+    value: 1
+  net.ipv4.ip_forward:
+    value: 1
+  net.ipv4.ip_local_reserved_ports:
+    value: 35357,49000-49001
+  net.ipv4.ip_nonlocal_bind:
+    value: 1
+  net.ipv4.neigh.default.gc_thresh1:
+    value: 1024
+  net.ipv4.neigh.default.gc_thresh2:
+    value: 2048
+  net.ipv4.neigh.default.gc_thresh3:
+    value: 4096
+  net.ipv6.conf.all.disable_ipv6:
+    value: 0
+  net.ipv6.conf.all.forwarding:
+    value: 0
+  net.ipv6.conf.default.disable_ipv6:
+    value: 0
+  net.ipv6.conf.lo.disable_ipv6:
+    value: 0
+  net.ipv6.ip_nonlocal_bind:
+    value: 1
+tripleo_network_config_os_net_config_mappings: {}
+tripleo_network_config_override: {}
+tripleo_network_config_template: net-config-two-nic-vlan-compute.j2
+tripleo_network_config_with_ansible: true
+tripleo_nova_libvirt_virsh_container: nova_virtproxyd
+tripleo_stack_name: overcloud
+tripleo_tripleo_lvmfilter_devices_allowlist: []
+tripleo_tripleo_lvmfilter_devices_denylist:
+- .*
+tripleo_tripleo_lvmfilter_enabled: false
+tuned_custom_profile: ''
+tuned_profile: throughput-performance
