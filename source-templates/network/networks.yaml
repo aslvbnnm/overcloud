@@ -1,0 +1,79 @@
+heat_template_version: wallaby
+
+description: Create networks to split out Overcloud traffic
+
+parameters:
+  CtlplaneNetworkCidrs:
+    type: json
+    description: Cidrs for the ctlplane network.
+  CtlplaneNetworkAttributes:
+    type: json
+    default: {}
+    description: >
+      A map containing attributes of the undercloud ctlplane network and
+      subnets. NOTE: The value for this parameter is automatically populated in
+      the plan environment by tripleoclient.
+
+resources:
+  InternalApiNetwork:
+    type: OS::TripleO::Network::InternalApi
+  StorageNetwork:
+    type: OS::TripleO::Network::Storage
+  StorageMgmtNetwork:
+    type: OS::TripleO::Network::StorageMgmt
+  TenantNetwork:
+    type: OS::TripleO::Network::Tenant
+
+  NetworkExtraConfig:
+    type: OS::TripleO::Network::ExtraConfig
+
+outputs:
+  net_cidr_map:
+    value:
+      # NOTE(hjensas): If a network does not have any network_cidrs, fall back
+      # to the ctlplane (provisioning) network.
+      internal_api:
+        yaql:
+          data:
+            network_cidrs: {get_attr: [InternalApiNetwork, network_cidrs]}
+            ctlplane_cidrs: {get_param: CtlplaneNetworkCidrs}
+          expression: switch(not isList($.data.network_cidrs) => $.data.ctlplane_cidrs, $.data.network_cidrs => $.data.network_cidrs)
+      storage:
+        yaql:
+          data:
+            network_cidrs: {get_attr: [StorageNetwork, network_cidrs]}
+            ctlplane_cidrs: {get_param: CtlplaneNetworkCidrs}
+          expression: switch(not isList($.data.network_cidrs) => $.data.ctlplane_cidrs, $.data.network_cidrs => $.data.network_cidrs)
+      storage_mgmt:
+        yaql:
+          data:
+            network_cidrs: {get_attr: [StorageMgmtNetwork, network_cidrs]}
+            ctlplane_cidrs: {get_param: CtlplaneNetworkCidrs}
+          expression: switch(not isList($.data.network_cidrs) => $.data.ctlplane_cidrs, $.data.network_cidrs => $.data.network_cidrs)
+      tenant:
+        yaql:
+          data:
+            network_cidrs: {get_attr: [TenantNetwork, network_cidrs]}
+            ctlplane_cidrs: {get_param: CtlplaneNetworkCidrs}
+          expression: switch(not isList($.data.network_cidrs) => $.data.ctlplane_cidrs, $.data.network_cidrs => $.data.network_cidrs)
+  net_ip_version_map:
+    value:
+      internal_api: {get_attr: [InternalApiNetwork, ip_version]}
+      storage: {get_attr: [StorageNetwork, ip_version]}
+      storage_mgmt: {get_attr: [StorageMgmtNetwork, ip_version]}
+      tenant: {get_attr: [TenantNetwork, ip_version]}
+  net_attributes_map:
+    value:
+      ctlplane: {get_param: CtlplaneNetworkAttributes}
+      internal_api:
+        network: {get_attr: [InternalApiNetwork, network_attrs]}
+        subnets: {get_attr: [InternalApiNetwork, subnet_attrs]}
+      storage:
+        network: {get_attr: [StorageNetwork, network_attrs]}
+        subnets: {get_attr: [StorageNetwork, subnet_attrs]}
+      storage_mgmt:
+        network: {get_attr: [StorageMgmtNetwork, network_attrs]}
+        subnets: {get_attr: [StorageMgmtNetwork, subnet_attrs]}
+      tenant:
+        network: {get_attr: [TenantNetwork, network_attrs]}
+        subnets: {get_attr: [TenantNetwork, subnet_attrs]}

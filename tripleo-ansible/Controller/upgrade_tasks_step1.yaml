@@ -1,0 +1,595 @@
+- block:
+  - name: Disable the cinder_volume cluster resource before container upgrade
+    pacemaker_resource:
+      resource: openstack-cinder-volume
+      state: disable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+  - command: pcs resource bundle update openstack-cinder-volume container image={{cinder_volume_image_latest}}
+    name: pcs resource bundle update cinder_volume for new container image name
+  - name: Enable the cinder_volume cluster resource
+    pacemaker_resource:
+      resource: openstack-cinder-volume
+      state: enable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+  name: Update cinder_volume pcs resource bundle for new container image
+  when:
+  - step|int == 1
+  - is_cinder_volume_bootstrap_node
+  - cinder_volume_pcs_res|bool
+  - cinder_volume_image_current != cinder_volume_image_latest
+- block:
+  - name: Disable the haproxy cluster resource before container upgrade
+    pacemaker_resource:
+      resource: haproxy-bundle
+      state: disable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+  - block:
+    - command: cibadmin --query --xpath "//storage-mapping[@id='haproxy-var-lib']"
+      failed_when: false
+      name: Check haproxy stats socket configuration in pacemaker
+      register: haproxy_stats_exposed
+    - command: cibadmin --query --xpath "//storage-mapping[@id='haproxy-cert']"
+      failed_when: false
+      name: Check haproxy public certificate configuration in pacemaker
+      register: haproxy_cert_mounted
+    - command: pcs resource bundle update haproxy-bundle storage-map add id=haproxy-var-lib
+        source-dir=/var/lib/haproxy target-dir=/var/lib/haproxy options=rw
+      name: Add a bind mount for stats socket in the haproxy bundle
+      when: haproxy_stats_exposed.rc == 6
+    - name: Set HAProxy public cert volume mount fact
+      set_fact:
+        haproxy_public_cert_path: /etc/pki/tls/private/overcloud_endpoint.pem
+        haproxy_public_tls_enabled: false
+    - command: pcs resource bundle update haproxy-bundle storage-map add id=haproxy-cert
+        source-dir={{ haproxy_public_cert_path }} target-dir=/var/lib/kolla/config_files/src-tls/{{
+        haproxy_public_cert_path }} options=ro
+      name: Add a bind mount for public certificate in the haproxy bundle
+      when:
+      - haproxy_cert_mounted.rc == 6
+      - haproxy_public_tls_enabled|bool
+    name: Expose HAProxy stats socket on the host and mount TLS cert if needed
+  - command: pcs resource bundle update haproxy-bundle container image={{haproxy_image_latest}}
+    name: Update the haproxy bundle to use the new container image name
+  - name: Enable the haproxy cluster resource
+    pacemaker_resource:
+      resource: haproxy-bundle
+      state: enable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+  name: Update haproxy pcs resource bundle for new container image
+  when:
+  - step|int == 1
+  - is_haproxy_bootstrap_node|bool
+  - haproxy_pcs_res|bool
+  - haproxy_image_current != haproxy_image_latest
+- name: set mysql container name fact
+  set_fact:
+    mysql_container_name: galera-bundle
+  when:
+  - step|int == 1
+- block:
+  - command: podman ps -q --filter name={{ mysql_container_name }} --filter status=running
+    name: mysql container id
+    register: mysql_container_id
+  - name: set mysql container id fact
+    set_fact:
+      mysql_container: '{{ mysql_container_id.stdout }}'
+  - block:
+    - name: Get the list of all OpenStack DB users
+      register: openstack_db_users
+      shell: jq -r 'to_entries[] | select(.key|endswith("::db::mysql::user")) | .value'
+        /etc/puppet/hieradata/service_configs.json
+    - name: List all DB users that match the DB users to be dropped
+      register: mysql_db_users
+      shell: for u in {{ openstack_db_users.stdout_lines | join(' ') }}; do podman
+        exec -u root -it "{{ mysql_container }}" mysql -sNe "select concat('\`',user,'\`@\`',host,'\`')
+        from mysql.user where user = '$u' and host != '%';"; done
+    - debug:
+        msg: '{{ mysql_db_users.stdout_lines }}'
+      name: resulting DB users to be dropped
+    - loop: '{{ mysql_db_users.stdout_lines }}'
+      name: Drop all unneeded Openstack DB users
+      shell: podman exec -u root -it "{{ mysql_container }}" mysql -sNe 'drop user
+        {{ item }};'
+    name: Mysql script to drop unused DB users
+    when: ( mysql_container | length ) > 0
+  name: Drop unused OpenStack DB users
+  when:
+  - step|int == 1
+  - mysql_short_bootstrap_node_name|lower == ansible_facts['hostname']|lower
+- block:
+  - name: Disable the galera cluster resource before container upgrade
+    pacemaker_resource:
+      resource: galera
+      state: disable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+  - block:
+    - command: cibadmin --query --xpath "//storage-mapping[@id='mysql-log']"
+      failed_when: false
+      name: Check Mysql logging configuration in pacemaker
+      register: mysql_logs_moved
+    - block:
+      - command: pcs resource bundle update galera-bundle storage-map add id=mysql-log
+          source-dir=/var/log/containers/mysql target-dir=/var/log/mysql options=rw
+        name: Add a bind mount for logging in the galera bundle
+      - command: pcs resource update galera log=/var/log/mysql/mysqld.log
+        name: Reconfigure Mysql log file in the galera resource agent
+      name: Change Mysql logging configuration in pacemaker
+      when: mysql_logs_moved.rc == 6
+    name: Move Mysql logging to /var/log/containers
+  - command: pcs resource bundle update galera-bundle container image={{galera_image_latest}}
+    name: Update the galera bundle to use the new container image name
+  - name: Enable the galera cluster resource
+    pacemaker_resource:
+      resource: galera
+      state: enable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+  name: Update galera pcs resource bundle for new container image
+  when:
+  - step|int == 1
+  - is_mysql_bootstrap_node|bool
+  - galera_pcs_res|bool
+  - galera_image_current != galera_image_latest
+- file:
+    path: /etc/cron.daily/containers-tmpwatch
+    state: absent
+  name: Ensure old cron.daily is absent
+  when: step|int == 1
+- name: set first_controller fact
+  set_fact:
+    first_controller: '{{ groups[''ovn_controller'']|first|lower == ansible_facts[''hostname'']|lower
+      }}'
+- block:
+  - async: 600
+    become: true
+    containers.podman.podman_image:
+      force: true
+      name: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+      validate_certs: false
+    delegate_to: '{{ item }}'
+    loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+      }}'
+    name: Force pull image in case image name doesn't change.
+    poll: 0
+    register: ovn_controller_image_update
+    tags:
+    - ovn
+    - ovn_image
+    when: step|int == 1
+  - async_status:
+      jid: '{{ async_result_item.ansible_job_id }}'
+    become: true
+    delay: 1
+    delegate_to: '{{ async_result_item.item }}'
+    loop: '{{ovn_controller_image_update.results }}'
+    loop_control:
+      loop_var: async_result_item
+    name: Was the ovn_controller image pull successful.
+    register: async_poll_results
+    retries: 600
+    tags:
+    - ovn
+    - ovn_image
+    until: async_poll_results.finished
+    when:
+    - step|int == 1
+    - '''results'' in ovn_controller_image_update'
+  - debug:
+      msg: ovn container will be using {{ image }}
+    name: OVN Container image used
+    tags: ovn
+    vars:
+      image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+    when: step|int == 1
+  - async: 600
+    become: true
+    delegate_to: '{{ item }}'
+    loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+      }}'
+    name: Update OVN OVS related parameters before update.
+    poll: 0
+    register: ovs_vsctl
+    shell: 'set -e
+
+      ovs-vsctl set Open_vSwitch . external_ids:ovn-ofctrl-wait-before-clear={{ timeout
+      }}
+
+      ovs-vsctl set Open_vSwitch . external_ids:ovn-monitor-all=true
+
+      ovs-vsctl set Open_vSwitch . external_ids:ovn-match-northd-version=false
+
+      '
+    tags:
+    - ovn
+    vars:
+      timeout: 8000
+    when:
+    - step|int == 1
+  - async_status:
+      jid: '{{ async_result_item.ansible_job_id }}'
+    become: true
+    delay: 1
+    delegate_to: '{{ async_result_item.item }}'
+    loop: '{{ovs_vsctl.results }}'
+    loop_control:
+      loop_var: async_result_item
+    name: Was the update of OVN OVS related parameter successful.
+    register: async_poll_results
+    retries: 600
+    tags:
+    - ovn
+    until: async_poll_results.finished
+    when:
+    - step|int == 1
+    - '''results'' in ovs_vsctl'
+  - set_fact:
+      any_ovn_host: '{{groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+        | first }}'
+    tags: ovn
+    when: step|int == 1
+  - become: true
+    delegate_to: '{{ any_ovn_host }}'
+    find:
+      paths: /var/lib/tripleo-config/container-startup-config/
+      patterns: '*ovn_controller.json'
+      recurse: true
+    name: Find ovn_controller configs in container-startup-configs
+    register: ovn_cont_17_0
+    tags:
+    - ovn
+    when: (step|int == 1) and (any_ovn_host is defined) and (any_ovn_host|length >
+      0)
+  - name: get directory path from the ovn_cont_17_0
+    set_fact:
+      ovn_config_path: '{{ ovn_cont_17_0.files.0.path | dirname }}'
+    tags: ovn
+    when: step|int == 1
+  - async: 600
+    become: true
+    delegate_to: '{{ item }}'
+    loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+      }}'
+    name: Update ovn_controller.
+    poll: 0
+    register: ovn_controller_update
+    tags: ovn
+    tripleo_container_manage:
+      config_dir: '{{ ovn_config_path }}'
+      config_id:
+      - tripleo_step{{config_step}}
+      config_overrides:
+        .*ovn_controller:
+          image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+          name: ovn_controller
+      config_patterns: '*ovn_controller.json'
+      debug: '{{ enable_debug | bool }}'
+      log_base_path: '{{ container_log_stdout_path }}'
+    vars:
+      config_step: '{{ (''step_4'' in ovn_config_path) | ternary(''4'', ''3'')}}'
+    when: step|int == 1
+  - async_status:
+      jid: '{{ async_result_item.ansible_job_id }}'
+    become: true
+    delay: 1
+    delegate_to: '{{ async_result_item.item }}'
+    loop: '{{ovn_controller_update.results }}'
+    loop_control:
+      loop_var: async_result_item
+    name: Was the ovn_controller successful.
+    register: async_poll_results
+    retries: 600
+    tags: ovn
+    until: async_poll_results.finished
+    when:
+    - step|int == 1
+    - '''results'' in ovn_controller_update'
+  name: Trigger external_update OVN block on first controller
+  when: first_controller | bool
+- block:
+  - name: Disable the rabbitmq cluster resource before container upgrade
+    pacemaker_resource:
+      resource: rabbitmq-bundle
+      state: disable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+  - block:
+    - command: cibadmin --query --xpath "//storage-mapping[@id='rabbitmq-log']"
+      failed_when: false
+      name: Check rabbitmq logging configuration in pacemaker
+      register: rabbitmq_logs_moved
+    - command: pcs resource bundle update rabbitmq-bundle storage-map add id=rabbitmq-log
+        source-dir=/var/log/containers/rabbitmq target-dir=/var/log/rabbitmq options=rw
+      name: Add a bind mount for logging in the rabbitmq bundle
+      when: rabbitmq_logs_moved.rc == 6
+    name: Move rabbitmq logging to /var/log/containers
+  - command: pcs resource bundle update rabbitmq-bundle container image={{rabbitmq_image_latest}}
+    name: Update the rabbitmq bundle to use the new container image name
+  - name: Enable the rabbitmq cluster resource
+    pacemaker_resource:
+      resource: rabbitmq-bundle
+      state: enable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+  name: Update rabbitmq-bundle pcs resource bundle for new container image
+  when:
+  - step|int == 1
+  - is_rpc_rabbitmq_bootstrap_node|bool
+  - rabbitmq_pcs_res|bool
+  - rabbitmq_image_current != rabbitmq_image_latest
+- block:
+  - lineinfile:
+      dest: /etc/hosts
+      line: '{{ undercloud_hosts_entries | join('''') }}'
+      state: present
+    name: Make sure the Undercloud hostname is included in /etc/hosts
+    when:
+    - undercloud_hosts_entries is defined
+  name: Configure Podman registry
+  when:
+  - step|int == 1
+- block:
+  - name: Set login facts
+    no_log: true
+    set_fact:
+      container_default_pids_limit: 4096
+      container_events_logger_mechanism: journald
+      container_registry_insecure_registries: []
+      container_registry_login: false
+      container_registry_logins: {}
+      container_registry_logins_json:
+        registry.redhat.io:
+          grosenbe-redhat.com: i.am.king.bison.6591
+  - name: Convert logins json to dict
+    no_log: true
+    set_fact:
+      container_registry_logins: '{{ container_registry_logins_json | from_json }}'
+    when:
+    - container_registry_logins_json is string
+    - container_registry_login | bool
+    - (container_registry_logins_json | length) > 0
+  - name: Set registry logins
+    no_log: true
+    set_fact:
+      container_registry_logins: '{{ container_registry_logins_json }}'
+    when:
+    - container_registry_logins_json is mapping
+    - container_registry_login | bool
+    - (container_registry_logins_json | length) > 0
+  - include_role:
+      name: tripleo_podman
+      tasks_from: tripleo_podman_install.yml
+    name: Run podman install
+    vars:
+      tripleo_container_default_pids_limit: '{{ container_default_pids_limit }}'
+      tripleo_container_events_logger_mechanism: '{{ container_events_logger_mechanism
+        }}'
+      tripleo_container_registry_insecure_registries: '{{ container_registry_insecure_registries
+        }}'
+  - include_role:
+      name: tripleo_podman
+      tasks_from: tripleo_podman_login.yml
+    name: Run podman login
+    vars:
+      tripleo_container_registry_login: '{{ container_registry_login | bool }}'
+      tripleo_container_registry_logins: '{{ container_registry_logins }}'
+  name: Run podman install
+  tags:
+  - system_upgrade
+  - system_upgrade_run
+  when:
+  - step|int == 1
+- lineinfile:
+    backrefs: true
+    dest: /usr/share/containers/containers.conf
+    line: '#\1'
+    regexp: (?i)^(infra_image.*)
+    state: present
+  name: Comment infra_image in container.conf
+  when:
+  - step|int == 1
+- name: Stop snmp service
+  service: name=snmpd state=stopped
+  when:
+  - step|int == 1
+  - snmpd_enabled|bool
+- block:
+  - failed_when: false
+    name: Disable tripleo-iptables.service
+    register: systemd_tripleo_iptables
+    systemd:
+      enabled: false
+      name: tripleo-iptables.service
+      state: stopped
+  - file:
+      path: /etc/systemd/system/tripleo-iptables.service
+      state: absent
+    name: Cleanup tripleo-iptables.services
+  - failed_when: false
+    name: Disable tripleo-ip6tables.service
+    register: systemd_tripleo_ip6tables
+    systemd:
+      enabled: false
+      name: tripleo-ip6tables.service
+      state: stopped
+  - file:
+      path: /etc/systemd/system/tripleo-ip6tables.service
+      state: absent
+    name: Cleanup tripleo-ip6tables.services
+  - name: Reload systemd
+    systemd:
+      daemon_reload: true
+    when:
+    - (systemd_tripleo_iptables is changed or systemd_tripleo_ip6tables is changed)
+  name: Cleanup tripleo-iptables services
+  when:
+  - (step | int) == 1
+- name: Gather missing facts
+  setup:
+    gather_subset:
+    - '!all'
+    - '!min'
+    - distribution
+  tags:
+  - always
+- name: Set leapp facts
+  set_fact:
+    upgrade_leapp_command_options: ''
+    upgrade_leapp_debug: false
+    upgrade_leapp_devel_skip: ''
+    upgrade_leapp_enabled: "{{ _upgradeLeappEnabled | bool and\n   ansible_facts['distribution']\
+      \ == 'RedHat' and\n   ansible_facts['distribution_major_version'] is version('8',\
+      \ '==') }}"
+    upgrade_leapp_post_reboot_delay: 120
+    upgrade_leapp_reboot_timeout: 3600
+  tags:
+  - always
+  vars:
+    _upgradeLeappEnabled: false
+- block:
+  - block:
+    - name: Run UpgradeInitCommand
+      shell: '#!/bin/bash
+
+
+        if [[ -f /etc/resolv.conf.save ]] ; then rm /etc/resolv.conf.save; fi
+
+
+        '
+    - name: Run UpgradeInitCommonCommand
+      shell: '#!/bin/bash
+
+
+        '
+    - dnf:
+        name: '@{{ item.module }}:{{ item.stream }}/{{ item.profile|default(''common'')
+          }}'
+        state: present
+      loop: '{{ dnf_module_list|list }}'
+      name: Ensure DNF modules have the right stream
+      vars:
+        dnf_module_list: []
+      when:
+      - dnf_module_list|length > 0
+      - item.distribution_version is defined
+      - ansible_facts['distribution_major_version'] is version(item.distribution_version,
+        '==')
+    - name: Ensure TripleO prerequisite packages are installed
+      package:
+        name:
+        - jq
+        - lvm2
+        - openstack-selinux
+        - os-net-config
+        - puppet-tripleo
+        - python3-heat-agent*
+        - rsync
+        state: present
+      when: ansible_facts['distribution_major_version'] is version('8', '==')
+    - name: Ensure TripleO prerequisite packages are installed and use role based
+        heat variable to provide specific list of packages
+      package:
+        name: '{{ base_tripleo_packages }}'
+        state: present
+      vars:
+        base_tripleo_packages: []
+      when:
+      - ansible_facts['distribution_major_version'] is version('8', '==')
+      - base_tripleo_packages|length > 0
+    - name: WA for 2240185 - If the image is schema 1 and lacks signatures than add
+        empty signatures
+      shell: "for manifest_file in `find /var/lib/containers/storage/overlay-images/\
+        \ -name 'manifest'`\ndo\n    cat <<< $( jq  'if .schemaVersion == 1 then if\
+        \ has(\"signatures\") then . else .signatures=[] end else . end' $manifest_file\
+        \ ) > $manifest_file\ndone\n"
+      when: ansible_facts['distribution_major_version'] is version('8', '==')
+    name: Package and repo update tasks
+    when: step|int == 0
+  - check_mode: false
+    command: /usr/bin/rpm -q libvirt-daemon
+    failed_when: false
+    name: check if libvirt is installed
+    register: libvirt_installed
+    when: step|int == 0
+  - loop:
+    - libvirtd.service
+    - virtlogd.socket
+    name: make sure libvirt services are disabled and masked
+    service:
+      daemon_reload: true
+      enabled: false
+      masked: true
+      name: '{{ item }}'
+      state: stopped
+    when:
+    - step|int == 0
+    - libvirt_installed.rc == 0
+  - name: Special treatment for OpenvSwitch
+    register: ovs_upgrade
+    tripleo_ovs_upgrade: null
+    when:
+    - step|int == 2
+  - name: Always ensure the openvswitch service is enabled and running after upgrades
+    service:
+      enabled: true
+      name: openvswitch
+      state: started
+    when:
+    - step|int == 2
+    - ovs_upgrade.changed|bool
+  - name: Check for os-net-config upgrade
+    register: os_net_config_need_upgrade
+    shell: yum check-upgrade | awk '/os-net-config/{print}'
+    when: step|int == 3
+  - name: Check that os-net-config has configuration
+    register: stat_config_json
+    stat:
+      get_attributes: false
+      get_checksum: false
+      get_mime: false
+      path: /etc/os-net-config/config.json
+    when: step|int == 3
+  - block:
+    - name: Upgrade os-net-config
+      package: name=os-net-config state=latest
+    - changed_when: os_net_config_upgrade.rc == 2
+      command: os-net-config --no-activate -c /etc/os-net-config/config.json -v --detailed-exit-codes
+      failed_when: os_net_config_upgrade.rc not in [0,2]
+      name: take new os-net-config parameters into account now
+      register: os_net_config_upgrade
+    when:
+    - step|int == 3
+    - os_net_config_need_upgrade.stdout
+    - stat_config_json.stat.exists
+  - name: Update all packages
+    vars:
+      skip_package_update: false
+    when:
+    - step|int == 3
+    - not skip_package_update|bool
+    yum:
+      exclude: ansible-core
+      name: '*'
+      state: latest
+  name: Host packages setup
+  tags: setup_packages

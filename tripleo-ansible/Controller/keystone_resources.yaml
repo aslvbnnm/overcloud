@@ -1,0 +1,105 @@
+cinder:
+  users:
+    cinder:
+      password: pfll4lftd7hzsfpmktrrm6x2f
+      roles:
+      - admin
+      - service
+cinderv3:
+  endpoints:
+    admin: http://172.16.2.10:8776/v3/%(tenant_id)s
+    internal: http://172.16.2.10:8776/v3/%(tenant_id)s
+    public: http://192.168.131.60:8776/v3/%(tenant_id)s
+  region: regionOne
+  service: volumev3
+  users:
+    cinderv3:
+      password: pfll4lftd7hzsfpmktrrm6x2f
+      roles:
+      - admin
+      - service
+glance:
+  endpoints:
+    admin: http://172.16.2.10:9293
+    internal: http://172.16.2.10:9293
+    public: http://192.168.131.60:9292
+  region: regionOne
+  service: image
+  users:
+    glance:
+      password: 7kh7n7w2z5pb24h7qtgjr42rg
+heat:
+  domains:
+  - heat_stack
+  endpoints:
+    admin: http://172.16.2.10:8004/v1/%(tenant_id)s
+    internal: http://172.16.2.10:8004/v1/%(tenant_id)s
+    public: http://192.168.131.60:8004/v1/%(tenant_id)s
+  region: regionOne
+  roles:
+  - heat_stack_user
+  service: orchestration
+  users:
+    heat:
+      password: 8dkpzcsfg5h4kt2hf6jjz76kc
+    heat_stack_domain_admin:
+      domain: heat_stack
+      password: 7w88mchdcsdkz5zmxlx9xrmp9
+      roles:
+      - admin
+heat-cfn:
+  endpoints:
+    admin: http://172.16.2.10:8000/v1
+    internal: http://172.16.2.10:8000/v1
+    public: http://192.168.131.60:8000/v1
+  region: regionOne
+  service: cloudformation
+  users:
+    heat-cfn:
+      password: 8dkpzcsfg5h4kt2hf6jjz76kc
+neutron:
+  endpoints:
+    admin: http://172.16.2.10:9696
+    internal: http://172.16.2.10:9696
+    public: http://192.168.131.60:9696
+  region: regionOne
+  service: network
+  users:
+    neutron:
+      password: xdpszmqntmkbtxnfkhk8trzkw
+nova:
+  endpoints:
+    admin: http://172.16.2.10:8774/v2.1
+    internal: http://172.16.2.10:8774/v2.1
+    public: http://192.168.131.60:8774/v2.1
+  region: regionOne
+  service: compute
+  users:
+    nova:
+      password: shxb4mjmzm9mx9fgxmztzjjjg
+      roles:
+      - admin
+      - service
+placement:
+  endpoints:
+    admin: http://172.16.2.10:8778/placement
+    internal: http://172.16.2.10:8778/placement
+    public: http://192.168.131.60:8778/placement
+  region: regionOne
+  service: placement
+  users:
+    placement:
+      password: tpwgkqjj2cvpw7ttbjldddvpg
+swift:
+  endpoints:
+    admin: http://172.16.4.10:8080
+    internal: http://172.16.4.10:8080/v1/AUTH_%(tenant_id)s
+    public: http://192.168.131.60:8080/v1/AUTH_%(tenant_id)s
+  region: regionOne
+  roles:
+  - swiftoperator
+  - ResellerAdmin
+  service: object-store
+  users:
+    swift:
+      password: qqc7qd682lvcbn5btmx6vx28w

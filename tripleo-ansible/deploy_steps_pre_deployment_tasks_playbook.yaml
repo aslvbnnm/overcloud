@@ -1,0 +1,31 @@
+- hosts: Controller:overcloud
+  strategy: tripleo_free
+  name: Pre Deployment Step Tasks
+  become: true
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 57536d10-1faf-4377-a332-3f9d87d9e400
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+
+    - name: Pre Deployment Step Tasks
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'Pre Deployment Step Tasks' to resume from this task
+    - include_tasks: "{{ _task_file_path }}"
+      vars:
+        _task_file_path: "{{ tripleo_role_name }}/pre_deploy_step_tasks.yaml"
+      when: "'{{ playbook_dir }}/{{ _task_file_path }}' is exists"
+  tags:
+    - overcloud
+    - pre_deploy_steps_tasks

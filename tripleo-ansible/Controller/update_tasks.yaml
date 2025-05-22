@@ -1,0 +1,437 @@
+- block:
+  - become: true
+    name: Get cinder_volume image from pacemaker
+    register: xmllint_pcmk_cinder_volume_image
+    shell: xmllint --xpath "string(//bundle[@id='openstack-cinder-volume']/podman/@image)"
+      /var/lib/pacemaker/cib/cib.xml
+  - name: Get container cinder_volume image
+    set_fact:
+      cinder_volume_image: registry.redhat.io/rhosp-rhel9/openstack-cinder-volume:17.1.6
+      cinder_volume_image_latest: cluster.common.tag/cinder-volume:pcmklatest
+      pcmk_cinder_volume_image: '{{xmllint_pcmk_cinder_volume_image.stdout}}'
+  when: step|int in [0,2]
+- assert:
+    fail_msg: cinder-volume image change detected, run overcloud external-update --tags
+      ha_image_update first
+    that: pcmk_cinder_volume_image == cinder_volume_image_latest
+  name: Check for update of cinder-volume container image name
+  when: step|int == 0
+- block:
+  - include_role:
+      name: tripleo_container_rm
+    name: Remove non-HA cinder_volume container
+    vars:
+      tripleo_container_cli: '{{ container_cli }}'
+      tripleo_containers_to_rm:
+      - cinder_volume
+  name: Tear-down non-HA cinder_volume container
+  when:
+  - step|int == 1
+- block:
+  - include_role:
+      name: tripleo_container_tag
+    name: Retag pcmklatest to latest cinder_volume image
+    vars:
+      container_image: '{{cinder_volume_image}}'
+      container_image_latest: '{{cinder_volume_image_latest}}'
+  name: cinder_volume fetch and retag container image for pacemaker
+  when: step|int == 2
+- block:
+  - become: true
+    name: Get haproxy image from pacemaker
+    register: xmllint_pcmk_haproxy_image
+    shell: xmllint --xpath "string(//bundle[@id='haproxy-bundle']/podman/@image)"
+      /var/lib/pacemaker/cib/cib.xml
+  - name: Get container haproxy image
+    set_fact:
+      haproxy_image: registry.redhat.io/rhosp-rhel9/openstack-haproxy:17.1.6
+      haproxy_image_latest: cluster.common.tag/haproxy:pcmklatest
+      pcmk_haproxy_image: '{{xmllint_pcmk_haproxy_image.stdout}}'
+  when: step|int in [0,2]
+- assert:
+    fail_msg: haproxy image change detected, run overcloud external-update --tags
+      ha_image_update first
+    that: pcmk_haproxy_image == haproxy_image_latest
+  name: Check for update of haproxy container image name
+  when: step|int == 0
+- block:
+  - include_role:
+      name: tripleo_container_rm
+    name: Remove non-HA haproxy container
+    vars:
+      tripleo_container_cli: '{{ container_cli }}'
+      tripleo_containers_to_rm:
+      - haproxy
+  name: Tear-down non-HA haproxy container
+  when:
+  - step|int == 1
+- block:
+  - name: set is_haproxy_bootstrap_node fact
+    set_fact: is_haproxy_bootstrap_node={{haproxy_short_bootstrap_node_name|lower
+      == ansible_facts['hostname']|lower}}
+    tags: common
+    when:
+    - haproxy_short_bootstrap_node_name|default(false)
+  name: Set HAProxy upgrade facts
+- block:
+  - command: cibadmin --query --xpath "//storage-mapping[@id='haproxy-cert']"
+    failed_when: false
+    name: Check haproxy public certificate configuration in pacemaker
+    register: haproxy_cert_mounted
+  - name: Disable the haproxy cluster resource
+    pacemaker_resource:
+      resource: haproxy-bundle
+      state: disable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+    when: haproxy_cert_mounted.rc == 6
+  - name: Set HAProxy public cert volume mount fact
+    set_fact:
+      haproxy_public_cert_path: /etc/pki/tls/private/overcloud_endpoint.pem
+      haproxy_public_tls_enabled: false
+  - command: pcs resource bundle update haproxy-bundle storage-map add id=haproxy-cert
+      source-dir={{ haproxy_public_cert_path }} target-dir=/var/lib/kolla/config_files/src-tls/{{
+      haproxy_public_cert_path }} options=ro
+    name: Add a bind mount for public certificate in the haproxy bundle
+    when: haproxy_cert_mounted.rc == 6 and haproxy_public_tls_enabled|bool
+  - name: Enable the haproxy cluster resource
+    pacemaker_resource:
+      resource: haproxy-bundle
+      state: enable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+    when: haproxy_cert_mounted.rc == 6
+  name: Mount TLS cert if needed
+  when:
+  - step|int == 1
+  - is_haproxy_bootstrap_node
+- block:
+  - include_role:
+      name: tripleo_container_tag
+    name: Retag pcmklatest to latest haproxy image
+    vars:
+      container_image: '{{haproxy_image}}'
+      container_image_latest: '{{haproxy_image_latest}}'
+  name: Haproxy fetch and retag container image for pacemaker
+  when:
+  - step|int == 2
+- block:
+  - file:
+      mode: 1023
+      path: /var/tmp
+      setype: tmp_t
+      state: directory
+    name: Reset selinux label on /var/tmp
+  name: Anchor for upgrade and update tasks
+  when: step|int == 0
+- block:
+  - become: true
+    name: Get galera image from pacemaker
+    register: xmllint_pcmk_galera_image
+    shell: xmllint --xpath "string(//bundle[@id='galera-bundle']/podman/@image)" /var/lib/pacemaker/cib/cib.xml
+  - name: Get container galera image
+    set_fact:
+      galera_image: registry.redhat.io/rhosp-rhel9/openstack-mariadb:17.1.6
+      galera_image_latest: cluster.common.tag/mariadb:pcmklatest
+      pcmk_galera_image: '{{xmllint_pcmk_galera_image.stdout}}'
+  when: step|int in [0,2]
+- assert:
+    fail_msg: galera image change detected, run overcloud external-update --tags ha_image_update
+      first
+    that: pcmk_galera_image == galera_image_latest
+  name: Check for update of galera container image name
+  when: step|int == 0
+- block:
+  - changed_when: false
+    command: podman container exists mysql
+    failed_when: false
+    name: stat mysql container
+    register: stat_mysql_container
+  - changed_when: true
+    command:
+      argv: '{{ mysql_exec_data | container_exec_cmd }}'
+    name: Create clustercheck user and permissions
+    vars:
+      mysql_exec_data:
+        command:
+        - mysql
+        - /bin/sh
+        - -c
+        - mysql -e "CREATE USER IF NOT EXISTS 'clustercheck'@'localhost' IDENTIFIED
+          BY '${CLUSTERCHECK_PASSWORD}'; GRANT PROCESS ON *.* TO 'clustercheck'@'localhost'
+          WITH GRANT OPTION;"
+        environment:
+          CLUSTERCHECK_PASSWORD: k2d7v5mxx4pff2rpm2hbsvf9g
+    when:
+    - stat_mysql_container.rc == 0
+  - include_role:
+      name: tripleo_container_rm
+    name: Remove non-HA mysql container
+    vars:
+      tripleo_container_cli: '{{ container_cli }}'
+      tripleo_containers_to_rm:
+      - mysql
+  name: Tear-down non-HA mysql container
+  when:
+  - step|int == 1
+- block:
+  - include_role:
+      name: tripleo_container_tag
+    name: Retag pcmklatest to latest galera image
+    vars:
+      container_image: '{{galera_image}}'
+      container_image_latest: '{{galera_image_latest}}'
+  name: Mariadb fetch and retag container image for pacemaker
+  when: step|int == 2
+- name: Ensure mariadb-server is not installed on the host
+  when: step|int == 2
+  yum:
+    name: mariadb-server*
+    state: absent
+- file:
+    path: /etc/cron.daily/containers-tmpwatch
+    state: absent
+  name: Ensure old cron.daily is absent
+  when: step|int == 1
+- block:
+  - include_role:
+      name: tripleo_ovn_cluster
+    name: Configure OVN DBs and northd
+    vars:
+      tripleo_ovn_cluster_dbs_protocol: '{{ enable_internal_tls | ternary(''ssl'',
+        ''tcp'', ''tcp'') }}'
+      tripleo_ovn_cluster_nb_db_port: 6641
+      tripleo_ovn_cluster_nb_local_port: 6643
+      tripleo_ovn_cluster_nb_remote_port: 6643
+      tripleo_ovn_cluster_nb_ssl_ca_cert: /etc/ipa/ca.crt
+      tripleo_ovn_cluster_network: internal_api
+      tripleo_ovn_cluster_northd_ssl_ca_cert: /etc/ipa/ca.crt
+      tripleo_ovn_cluster_sb_db_port: 6642
+      tripleo_ovn_cluster_sb_local_port: 6644
+      tripleo_ovn_cluster_sb_remote_port: 6644
+      tripleo_ovn_cluster_sb_ssl_ca_cert: /etc/ipa/ca.crt
+  name: Configure OVN cluster during update
+  when: step|int == 4
+- block:
+  - include_role:
+      name: tripleo_container_manage
+    loop:
+    - ovn_cluster_north_db_server
+    - ovn_cluster_south_db_server
+    - ovn_cluster_northd
+    loop_control:
+      loop_var: ovn_container
+    name: Start OVN container
+    vars:
+      tripleo_container_manage_config: /var/lib/tripleo-config/container-startup-config/step_0
+      tripleo_container_manage_config_id: '{{ ovn_container }}'
+      tripleo_container_manage_config_patterns: '{{ ovn_container }}.json'
+  name: Update OVN cluster containers
+  when: step|int == 4
+- async: 30
+  name: Check pacemaker cluster running before the minor update
+  pacemaker_cluster: state=online check_and_fail=true
+  poll: 4
+  when: step|int == 0
+- name: Move virtual IPs to another node before stopping pacemaker
+  shell: "CLUSTER_NODE=$(crm_node -n)\necho \"Retrieving all the VIPs which are hosted\
+    \ on this node\"\nVIPS_TO_MOVE=$(crm_mon --as-xml | xmllint --xpath '//resource[@resource_agent\
+    \ = \"ocf::heartbeat:IPaddr2\" and @role = \"Started\" and @managed = \"true\"\
+    \ and ./node[@name = \"'${CLUSTER_NODE}'\"]]/@id' - | sed -e 's/id=//g' -e 's/\"\
+    //g')\nfor v in ${VIPS_TO_MOVE}; do\n    echo \"Moving VIP $v on another node\"\
+    \n    pcs resource ban $v ${CLUSTER_NODE} --wait=300\ndone\necho \"Removing the\
+    \ location constraints that were created to move the VIPs\"\nfor v in ${VIPS_TO_MOVE};\
+    \ do\n    echo \"Removing location ban for VIP $v\"\n    ban_id=$(cibadmin --query\
+    \ | xmllint --xpath 'string(//rsc_location[@rsc=\"'${v}'\" and @node=\"'${CLUSTER_NODE}'\"\
+    \ and @score=\"-INFINITY\"]/@id)' -)\n    if [ -n \"$ban_id\" ]; then\n      \
+    \  pcs constraint remove ${ban_id}\n    else\n        echo \"Could not retrieve\
+    \ and clear location constraint for VIP $v\" 2>&1\n    fi\ndone\n"
+  when:
+  - step|int == 1
+  - hostvars[inventory_hostname]["haproxy_node_names"]|default([])|length > 1
+- command: systemd-cat -t ha-shutdown /var/lib/container-config-scripts/pacemaker_mutex_shutdown.sh
+    --acquire
+  name: Acquire the cluster shutdown lock to stop pacemaker cluster
+  when: step|int == 1
+- name: Stop pacemaker cluster
+  pacemaker_cluster: state=offline
+  when: step|int == 1
+- name: Start pacemaker cluster
+  pacemaker_cluster: state=online
+  when: step|int == 4
+- command: systemd-cat -t ha-shutdown /var/lib/container-config-scripts/pacemaker_mutex_shutdown.sh
+    --release
+  name: Release the cluster shutdown lock
+  when: step|int == 4
+- block:
+  - become: true
+    name: Get rabbitmq image from pacemaker
+    register: xmllint_pcmk_rabbitmq_image
+    shell: xmllint --xpath "string(//bundle[@id='rabbitmq-bundle']/podman/@image)"
+      /var/lib/pacemaker/cib/cib.xml
+  - name: Get container rabbitmq image
+    set_fact:
+      pcmk_rabbitmq_image: '{{xmllint_pcmk_rabbitmq_image.stdout}}'
+      rabbitmq_image: registry.redhat.io/rhosp-rhel9/openstack-rabbitmq:17.1.6
+      rabbitmq_image_latest: cluster.common.tag/rabbitmq:pcmklatest
+  when: step|int in [0,2]
+- assert:
+    fail_msg: rabbitmq image change detected, run overcloud external-update --tags
+      ha_image_update first
+    that: pcmk_rabbitmq_image == rabbitmq_image_latest
+  name: Check for update of rabbitmq container image name
+  when: step|int == 0
+- block:
+  - include_role:
+      name: tripleo_container_rm
+    name: Remove non-HA rabbitmq container
+    vars:
+      tripleo_container_cli: '{{ container_cli }}'
+      tripleo_containers_to_rm:
+      - rabbitmq
+  name: Tear-down non-HA rabbitmq container
+  when:
+  - step|int == 1
+- block:
+  - include_role:
+      name: tripleo_container_tag
+    name: Retag pcmklatest to latest rabbitmq image
+    vars:
+      container_image: '{{rabbitmq_image}}'
+      container_image_latest: '{{rabbitmq_image_latest}}'
+  name: Rabbitmq fetch and retag container image for pacemaker
+  when: step|int == 2
+- block:
+  - become: true
+    containers.podman.podman_image:
+      force: true
+      name: '{{ prefetch_image }}'
+      validate_certs: false
+    delay: 5
+    loop: '{{ lookup(''template'', tripleo_role_name + ''/docker_config.yaml'', errors=''ignore'')
+      | default(''{}'', True) | from_yaml | recursive_get_key_from_dict(key=''image'')
+      | unique }}'
+    loop_control:
+      loop_var: prefetch_image
+    name: Pre-fetch all the containers
+    register: result
+    retries: 5
+    until: result is succeeded
+  name: Force pre-fetch of container images
+  when:
+  - (step|int) == 5
+- name: Check swift containers log folder/symlink exists
+  register: swift_log_link
+  stat:
+    path: /var/log/containers/swift
+- file:
+    path: /var/log/containers/swift
+    state: absent
+  name: Delete if symlink
+  when: swift_log_link.stat.islnk is defined and swift_log_link.stat.islnk
+- block:
+  - failed_when: false
+    name: Disable tripleo-iptables.service
+    register: systemd_tripleo_iptables
+    systemd:
+      enabled: false
+      name: tripleo-iptables.service
+      state: stopped
+  - file:
+      path: /etc/systemd/system/tripleo-iptables.service
+      state: absent
+    name: Cleanup tripleo-iptables.services
+  - failed_when: false
+    name: Disable tripleo-ip6tables.service
+    register: systemd_tripleo_ip6tables
+    systemd:
+      enabled: false
+      name: tripleo-ip6tables.service
+      state: stopped
+  - file:
+      path: /etc/systemd/system/tripleo-ip6tables.service
+      state: absent
+    name: Cleanup tripleo-ip6tables.services
+  - name: Reload systemd
+    systemd:
+      daemon_reload: true
+    when:
+    - (systemd_tripleo_iptables is changed or systemd_tripleo_ip6tables is changed)
+  name: Cleanup tripleo-iptables services
+  when:
+  - (step | int) == 1
+- include_role:
+    name: tripleo_redhat_enforce
+  name: Enforce RHOSP rules regarding subscription.
+  vars:
+    skip_rhel_enforcement: false
+  when:
+  - step|int == 0
+  - ansible_facts['distribution'] == 'RedHat'
+  - not (skip_rhel_enforcement | bool)
+- loop: '{{ dnf_module_list|list }}'
+  name: Ensure DNF modules have the right stream enabled
+  tripleo_dnf_stream:
+    name: '{{ item.module }}:{{ item.stream }}'
+    state: enabled
+  vars:
+    dnf_module_list: []
+  when:
+  - step|int == 0
+  - dnf_module_list|length > 0
+  - item.distribution_version is defined
+  - ansible_facts['distribution_major_version'] is version(item.distribution_version,
+    '==')
+- name: Check for existing yum.pid
+  register: yum_pid_file
+  stat: path=/run/yum.pid
+  when: step|int == 0 or step|int == 3
+- fail: msg="ERROR existing yum.pid detected - can't continue! Please ensure there
+    is no other package update process for the duration of the minor update worfklow.
+    Exiting."
+  name: Exit if existing yum process
+  when: (step|int == 0 or step|int == 3) and yum_pid_file.stat.exists
+- name: Special treatment for OpenvSwitch
+  register: ovs_upgrade
+  tripleo_ovs_upgrade: null
+  when:
+  - step|int == 2
+- name: Always ensure the openvswitch service is enabled and running after upgrades
+  service:
+    enabled: true
+    name: openvswitch
+    state: started
+  when:
+  - step|int == 2
+  - ovs_upgrade.changed|bool
+- block:
+  - name: Update all packages
+    yum:
+      exclude: ansible-core
+      name: '*'
+      state: latest
+  - command: grub2-mkconfig -o /boot/grub2/grub.cfg
+    name: Generate grub config
+  - name: Find and replace grub.cfg
+    shell: 'set -o pipefail
+
+      find /boot/efi/EFI/ -name ''grub.cfg'' | xargs -i grub2-mkconfig -o {}
+
+      '
+  name: Update packages and grub
+  vars:
+    skip_package_update: false
+  when:
+  - step|int == 3
+  - not skip_package_update|bool
+- ignore_errors: true
+  name: Ensure openvswitch is running after update
+  service:
+    enabled: true
+    name: openvswitch
+    state: started
+  when: step|int == 3

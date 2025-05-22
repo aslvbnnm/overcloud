@@ -1,0 +1,54 @@
+003 accept ssh from all:
+  dport: 22
+  extras:
+    ensure: absent
+  proto: tcp
+003 accept ssh from ctlplane subnet 192.168.131.0/25:
+  dport: 22
+  proto: tcp
+  source: 192.168.131.0/25
+105 ntp:
+  dport: 123
+  proto: udp
+111 ceph_osd:
+  dport:
+  - 6800-7300
+113 nova_migration_target accept api subnet 172.16.2.0/24:
+  dport: 2022
+  proto: tcp
+  source: 172.16.2.0/24
+113 nova_migration_target accept libvirt subnet 172.16.2.0/24:
+  dport: 2022
+  proto: tcp
+  source: 172.16.2.0/24
+118 neutron vxlan networks:
+  dport: 4789
+  proto: udp
+119 neutron geneve networks:
+  dport: 6081
+  proto: udp
+120 neutron geneve networks no conntrack:
+  action: append
+  chain: OUTPUT
+  dport: 6081
+  jump: NOTRACK
+  proto: udp
+  state: []
+  table: raw
+121 neutron geneve networks no conntrack:
+  action: append
+  chain: PREROUTING
+  dport: 6081
+  jump: NOTRACK
+  proto: udp
+  state: []
+  table: raw
+124 snmp 192.168.131.0/25:
+  dport: 161
+  proto: udp
+  source: 192.168.131.0/25
+200 nova_libvirt:
+  dport:
+  - 16514
+  - 61152-61215
+  - 5900-6923

@@ -1,0 +1,275 @@
+- block:
+  - file:
+      path: '{{ item }}'
+      serole: object_r
+      setype: cert_t
+      seuser: system_u
+      state: directory
+    name: Create dirs for certificates and keys
+    with_items:
+    - /etc/pki/tls/certs/httpd
+    - /etc/pki/tls/private/httpd
+  - include_role:
+      name: linux-system-roles.certificate
+    vars:
+      certificate_requests:
+      - ca: ipa
+        dns: '{{ fqdn_ctlplane }}'
+        key_size: '2048'
+        name: httpd-ctlplane
+        principal: HTTP/{{ fqdn_ctlplane }}@{{ idm_realm }}
+        run_after: 'cp /etc/pki/tls/certs/httpd-ctlplane.crt /etc/pki/tls/certs/httpd/httpd-ctlplane.crt
+
+          cp /etc/pki/tls/private/httpd-ctlplane.key /etc/pki/tls/private/httpd/httpd-ctlplane.key
+
+          pkill -USR1 httpd
+
+          '
+      - ca: ipa
+        dns: '{{ fqdn_internal_api }}'
+        key_size: '2048'
+        name: httpd-internal_api
+        principal: HTTP/{{ fqdn_internal_api }}@{{ idm_realm }}
+        run_after: 'cp /etc/pki/tls/certs/httpd-internal_api.crt /etc/pki/tls/certs/httpd/httpd-internal_api.crt
+
+          cp /etc/pki/tls/private/httpd-internal_api.key /etc/pki/tls/private/httpd/httpd-internal_api.key
+
+          pkill -USR1 httpd
+
+          '
+      - ca: ipa
+        dns: '{{ fqdn_storage }}'
+        key_size: '2048'
+        name: httpd-storage
+        principal: HTTP/{{ fqdn_storage }}@{{ idm_realm }}
+        run_after: 'cp /etc/pki/tls/certs/httpd-storage.crt /etc/pki/tls/certs/httpd/httpd-storage.crt
+
+          cp /etc/pki/tls/private/httpd-storage.key /etc/pki/tls/private/httpd/httpd-storage.key
+
+          pkill -USR1 httpd
+
+          '
+      - ca: ipa
+        dns: '{{ fqdn_storage_mgmt }}'
+        key_size: '2048'
+        name: httpd-storage_mgmt
+        principal: HTTP/{{ fqdn_storage_mgmt }}@{{ idm_realm }}
+        run_after: 'cp /etc/pki/tls/certs/httpd-storage_mgmt.crt /etc/pki/tls/certs/httpd/httpd-storage_mgmt.crt
+
+          cp /etc/pki/tls/private/httpd-storage_mgmt.key /etc/pki/tls/private/httpd/httpd-storage_mgmt.key
+
+          pkill -USR1 httpd
+
+          '
+  name: Certificate generation
+  when:
+  - step|int == 1
+  - enable_internal_tls
+- import_role:
+    name: tripleo_container_tag
+  name: Cinder Volume tag container image for pacemaker
+  vars:
+    container_image: registry.redhat.io/rhosp-rhel9/openstack-cinder-volume:17.1.6
+    container_image_latest: cluster.common.tag/cinder-volume:pcmklatest
+  when: step|int == 1
+- block:
+  - name: Check if rsyslog exists
+    register: rsyslog_config
+    shell: systemctl is-active rsyslog
+  - block:
+    - blockinfile:
+        content: 'if $syslogfacility-text == ''{{facility}}'' and $programname ==
+          ''haproxy'' then -/var/log/containers/haproxy/haproxy.log
+
+          & stop
+
+          '
+        create: true
+        path: /etc/rsyslog.d/openstack-haproxy.conf
+      name: Forward logging to haproxy.log file
+      register: logconfig
+      vars:
+        facility: local0
+    - name: restart rsyslog service after logging conf change
+      service:
+        name: rsyslog
+        state: restarted
+      when: logconfig is changed
+    when:
+    - rsyslog_config is changed
+    - rsyslog_config.rc == 0
+  name: Configure rsyslog for HAproxy container managed by Pacemaker
+  when: step|int == 1
+- import_role:
+    name: tripleo_container_tag
+  name: HAproxy tag container image for pacemaker
+  vars:
+    container_image: registry.redhat.io/rhosp-rhel9/openstack-haproxy:17.1.6
+    container_image_latest: cluster.common.tag/haproxy:pcmklatest
+  when: step|int == 1
+- include_role:
+    name: tripleo_lvmfilter
+  name: Run lvmfilter role
+  when:
+  - step|int == 1
+- block:
+  - include_role:
+      name: linux-system-roles.certificate
+    vars:
+      certificate_requests:
+      - ca: ipa
+        dns:
+        - '{{fqdn_internal_api}}'
+        - '{{cloud_names.cloud_name_internal_api}}'
+        key_size: '2048'
+        name: mysql
+        principal: mysql/{{fqdn_internal_api}}@{{idm_realm}}
+  name: Certificate generation
+  when:
+  - step|int == 1
+  - enable_internal_tls
+- import_role:
+    name: tripleo_container_tag
+  name: MySQL tag container image for pacemaker
+  vars:
+    container_image: registry.redhat.io/rhosp-rhel9/openstack-mariadb:17.1.6
+    container_image_latest: cluster.common.tag/mariadb:pcmklatest
+  when: step|int == 1
+- block:
+  - block:
+    - include_role:
+        name: linux-system-roles.certificate
+      vars:
+        certificate_requests:
+        - ca: ipa
+          dns: '{{fqdn_internal_api}}'
+          key_size: '2048'
+          name: ovn_dbs
+          principal: ovn_dbs/{{fqdn_internal_api}}@{{idm_realm}}
+    name: Certificate generation
+    when: enable_internal_tls | bool
+  - name: set is_ovn_dbs_bootstrap_node fact
+    set_fact: is_ovn_dbs_bootstrap_node={{ovn_dbs_short_bootstrap_node_name|lower
+      == ansible_facts['hostname']|lower}}
+  - block:
+    - include_role:
+        name: tripleo_ovn_cluster
+      name: Configure OVN DBs and northd
+      vars:
+        tripleo_ovn_cluster_dbs_protocol: '{{ enable_internal_tls | ternary(''ssl'',
+          ''tcp'', ''tcp'') }}'
+        tripleo_ovn_cluster_nb_db_port: 6641
+        tripleo_ovn_cluster_nb_local_port: 6643
+        tripleo_ovn_cluster_nb_remote_port: 6643
+        tripleo_ovn_cluster_nb_ssl_ca_cert: /etc/ipa/ca.crt
+        tripleo_ovn_cluster_network: internal_api
+        tripleo_ovn_cluster_northd_ssl_ca_cert: /etc/ipa/ca.crt
+        tripleo_ovn_cluster_sb_db_port: 6642
+        tripleo_ovn_cluster_sb_local_port: 6644
+        tripleo_ovn_cluster_sb_remote_port: 6644
+        tripleo_ovn_cluster_sb_ssl_ca_cert: /etc/ipa/ca.crt
+  name: Prepare OVN cluster
+  when: step|int == 1
+- block:
+  - include_role:
+      name: linux-system-roles.certificate
+    vars:
+      certificate_requests:
+      - ca: ipa
+        dns: '{{fqdn_internal_api}}'
+        key_size: '2048'
+        name: ovn_controller
+        principal: ovn_controller/{{fqdn_internal_api}}@{{idm_realm}}
+  name: Certificate generation
+  when:
+  - step|int == 1
+  - enable_internal_tls
+- block:
+  - include_role:
+      name: linux-system-roles.certificate
+    vars:
+      certificate_requests:
+      - ca: ipa
+        dns: '{{fqdn_internal_api}}'
+        key_size: '2048'
+        name: rabbitmq
+        principal: rabbitmq/{{fqdn_internal_api}}@{{idm_realm}}
+        run_after: "container_name=$({{container_cli}} ps --format=\\{\\{.Names\\\
+          }\\} | grep -w -E 'rabbitmq(-bundle-.*-[0-9]+)?')\nservice_crt=\"/etc/pki/tls/certs/rabbitmq.crt\"\
+          \nservice_key=\"/etc/pki/tls/private/rabbitmq.key\"\nif echo \"$container_name\"\
+          \ | grep -q \"^rabbitmq-bundle\"; then\n  # lp#1917868: Do not use podman\
+          \ cp with HA containers as they get\n  # frozen temporarily and that can\
+          \ make pacemaker operation fail.\n  tar -c \"$service_crt\" \"$service_key\"\
+          \ | {{container_cli}} exec -i \"$container_name\" tar -C / -xv\n  # no need\
+          \ to update the mount point, because pacemaker\n  # recreates the container\
+          \ when it's restarted\nelse\n  # Refresh the cert at the mount-point\n \
+          \ {{container_cli}} cp $service_crt \"$container_name:/var/lib/kolla/config_files/src-tls/$service_crt\"\
+          \n  # Refresh the key at the mount-point\n  {{container_cli}} cp $service_key\
+          \ \"$container_name:/var/lib/kolla/config_files/src-tls/$service_key\"\n\
+          \  # Copy the new cert from the mount-point to the real path\n  {{container_cli}}\
+          \ exec -u root \"$container_name\" cp \"/var/lib/kolla/config_files/src-tls$service_crt\"\
+          \ \"$service_crt\"\n  # Copy the new key from the mount-point to the real\
+          \ path\n  {{container_cli}} exec -u root \"$container_name\" cp \"/var/lib/kolla/config_files/src-tls$service_key\"\
+          \ \"$service_key\"\nfi\n# Set appropriate permissions\n{{container_cli}}\
+          \ exec -u root \"$container_name\" chown rabbitmq:rabbitmq \"$service_crt\"\
+          \n{{container_cli}} exec -u root \"$container_name\" chown rabbitmq:rabbitmq\
+          \ \"$service_key\"\n# Trigger a pem cache clear in RabbitMQ to read the\
+          \ new certificates\n{{container_cli}} exec \"$container_name\" rabbitmqctl\
+          \ eval \"ssl:clear_pem_cache().\"\n"
+  name: Certificate generation
+  when:
+  - step|int == 1
+  - enable_internal_tls
+- import_role:
+    name: tripleo_container_tag
+  name: RabbitMQ tag container image for pacemaker
+  vars:
+    container_image: registry.redhat.io/rhosp-rhel9/openstack-rabbitmq:17.1.6
+    container_image_latest: cluster.common.tag/rabbitmq:pcmklatest
+  when: step|int == 1
+- block:
+  - become: true
+    containers.podman.podman_image:
+      force: true
+      name: '{{ prefetch_image }}'
+      validate_certs: false
+    delay: 5
+    loop: '{{ lookup(''template'', tripleo_role_name + ''/docker_config.yaml'', errors=''ignore'')
+      | default(''{}'', True) | from_yaml | recursive_get_key_from_dict(key=''image'')
+      | unique }}'
+    loop_control:
+      loop_var: prefetch_image
+    name: Pre-fetch all the containers
+    register: result
+    retries: 5
+    until: result is succeeded
+  when:
+  - (step|int) == 1
+- block:
+  - name: Check if rsyslog exists
+    register: swift_rsyslog_config
+    shell: systemctl is-active rsyslog
+  - copy:
+      content: '# Fix for https://bugs.launchpad.net/tripleo/+bug/1776180
+
+        local2.*                 /var/log/containers/swift/swift.log
+
+        &                        stop
+
+        '
+      dest: /etc/rsyslog.d/openstack-swift.conf
+    name: Forward logging to swift.log file
+    register: swift_logconfig
+    when:
+    - swift_rsyslog_config is defined
+    - swift_rsyslog_config.rc == 0
+  - name: Restart rsyslogd service after logging conf change
+    service:
+      name: rsyslog
+      state: restarted
+    when:
+    - swift_logconfig is defined
+    - swift_logconfig is changed
+  name: Configure rsyslog for swift
+  when:
+  - step|int == 1

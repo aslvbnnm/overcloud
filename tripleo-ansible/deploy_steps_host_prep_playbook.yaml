@@ -1,0 +1,38 @@
+- hosts: Controller:overcloud
+  strategy: tripleo_free
+  name: Host prep steps
+  become: true
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 57536d10-1faf-4377-a332-3f9d87d9e400
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+
+    - name: Host prep steps
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'Host prep steps' to resume from this task
+    - name: Deploy Artifacts
+      tripleo_push_artifacts:
+        artifact_urls: "{{ deploy_artifact_urls | default([]) }}"
+        artifact_paths: "{{ deploy_artifact_files | default([]) }}"
+      when:
+        - ((deploy_artifact_urls | default([]) | length) > 0) or
+          ((deploy_artifact_files | default([]) | length) > 0)
+    - include_tasks: "{{ _task_file_path }}"
+      vars:
+        _task_file_path: "{{ tripleo_role_name }}/host_prep_tasks.yaml"
+      when: "'{{ playbook_dir }}/{{ _task_file_path }}' is exists"
+  tags:
+    - overcloud
+    - host_prep_steps

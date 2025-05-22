@@ -1,0 +1,670 @@
+container_puppet_apply.sh:
+  content: "#!/bin/bash\nset -eux\nSTEP=$1\nTAGS=$2\nCONFIG=$3\nEXTRA_ARGS=${4:-''}\n\
+    if [ -d /tmp/puppet-etc ]; then\n  # ignore copy failures as these may be the\
+    \ same file depending on docker mounts\n  cp -a /tmp/puppet-etc/* /etc/puppet\
+    \ || true\nfi\necho \"{\\\"step\\\": ${STEP}}\" > /etc/puppet/hieradata/docker_puppet.json\n\
+    # $::deployment_type in puppet-tripleo\nexport FACTER_deployment_type=containers\n\
+    set +e\npuppet apply $EXTRA_ARGS \\\n    --verbose \\\n    --detailed-exitcodes\
+    \ \\\n    --summarize \\\n    --color=false \\\n    --modulepath /etc/puppet/modules:/opt/stack/puppet-modules:/usr/share/openstack-puppet/modules\
+    \ \\\n    --tags $TAGS \\\n    -e \"noop_resource('package'); ${CONFIG}\"\nrc=$?\n\
+    set -e\nset +ux\nif [ $rc -eq 2 -o $rc -eq 0 ]; then\n    exit 0\nfi\nexit $rc\n"
+  mode: '0700'
+create_swift_secret.sh:
+  content: "#!/bin/bash\nexport OS_PROJECT_DOMAIN_ID=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster project_domain_id)\nexport OS_USER_DOMAIN_ID=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster user_domain_id)\nexport OS_PROJECT_NAME=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster project_name)\nexport OS_USERNAME=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster username)\nexport OS_PASSWORD=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster password)\nexport OS_AUTH_URL=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster auth_endpoint)\nexport OS_AUTH_TYPE=password\nexport OS_IDENTITY_API_VERSION=3\n\
+    \necho \"Check if secret already exists\"\nsecret_href=$(openstack secret list\
+    \ --name swift_root_secret_uuid)\nrc=$?\nif [[ $rc != 0 ]]; then\n  echo \"Failed\
+    \ to check secrets, check if Barbican in enabled and responding properly\"\n \
+    \ exit $rc;\nfi\nif [ -z \"$secret_href\" ]; then\n  echo \"Create new secret\"\
+    \n  order_href=$(openstack secret order create --name swift_root_secret_uuid --payload-content-type=\"\
+    application/octet-stream\" --algorithm aes --bit-length 256 --mode ctr key -f\
+    \ value -c \"Order href\")\nfi\n"
+  mode: '0700'
+nova_api_ensure_default_cells.py:
+  content: "#!/usr/bin/python3\n#\n# Copyright 2022 Red Hat Inc.\n#\n# Licensed under\
+    \ the Apache License, Version 2.0 (the \"License\"); you may\n# not use this file\
+    \ except in compliance with the License. You may obtain\n# a copy of the License\
+    \ at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required\
+    \ by applicable law or agreed to in writing, software\n# distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS, WITHOUT\n# WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied. See the\n# License for the specific\
+    \ language governing permissions and limitations\n# under the License.\n\nfrom\
+    \ configparser import ConfigParser\nimport logging\nimport os\nimport subprocess\n\
+    import sys\nfrom urllib import parse as urlparse\n\nconfig = ConfigParser(strict=False)\n\
+    \ndebug = os.getenv('__OS_DEBUG', 'false')\n\nif debug.lower() == 'true':\n  \
+    \  loglevel = logging.DEBUG\nelse:\n    loglevel = logging.INFO\n\nlogging.basicConfig(stream=sys.stdout,\
+    \ level=loglevel)\nLOG = logging.getLogger('nova_api_ensure_default_cells')\n\n\
+    NOVA_CFG = '/etc/nova/nova.conf'\nCELL0_ID = '00000000-0000-0000-0000-000000000000'\n\
+    DEFAULT_CELL_NAME = 'default'\n\n\ndef template_netloc_credentials(netloc, index=None):\n\
+    \    if '@' in netloc:\n        userpass, hostport = netloc.split('@', 1)\n  \
+    \      has_pass = ':' in userpass\n        if index is None:\n            cred_template\
+    \ = '{username}'\n            if has_pass:\n                cred_template += ':{password}'\n\
+    \        else:\n            cred_template = '{{username{index}}}'.format(index=index)\n\
+    \            if has_pass:\n                cred_template += ':{{password{index}}}'.format(index=index)\n\
+    \        return '@'.join((cred_template, hostport))\n    else:\n        return\
+    \ netloc\n\n\ndef template_url(url):\n    parsed = urlparse.urlparse(url)\n  \
+    \  if ',' in parsed.netloc:\n        orig_netlocs = parsed.netloc.split(',')\n\
+    \        templ_netlocs = []\n        index = 0\n        for netloc in orig_netlocs:\n\
+    \            index += 1\n            templ_netlocs.append(template_netloc_credentials(netloc,\
+    \ index))\n        new_netloc = ','.join(templ_netlocs)\n    else:\n        new_netloc\
+    \ = template_netloc_credentials(parsed.netloc)\n    return parsed._replace(netloc=new_netloc).geturl()\n\
+    \n\ndef parse_list_cells(list_cells_output):\n    list_cells_lines = list_cells_output.split('\\\
+    n')\n    if len(list_cells_lines) < 5:\n        raise ValueError('Invalid nova-manage\
+    \ cell_v2 list_cells output')\n\n    data_rows = list_cells_lines[3:-2]\n    by_name\
+    \ = {}\n    by_uuid = {}\n\n    for row in data_rows:\n        parts = row.split('|')\n\
+    \        entry = {\n            'name': parts[1].strip(),\n            'uuid':\
+    \ parts[2].strip(),\n            'transport_url': parts[3].strip(),\n        \
+    \    'database_connection': parts[4].strip(),\n        }\n        by_name[entry['name']]\
+    \ = entry\n        by_uuid[entry['uuid']] = entry\n\n    return by_name, by_uuid\n\
+    \n\ndef create_or_update_default_cells(cell0_db, default_db, default_transport_url):\n\
+    \    list_cells_cmd = ['/usr/bin/nova-manage', 'cell_v2', 'list_cells', '--verbose']\n\
+    \    list_cells_output = subprocess.check_output(list_cells_cmd, encoding='utf-8')\n\
+    \    cells_by_name, cells_by_uuid = parse_list_cells(list_cells_output)\n\n  \
+    \  if CELL0_ID in cells_by_uuid:\n        LOG.info('Setting cell0 database connection\
+    \ to \\'{}\\''.format(cell0_db))\n        cmd = [\n            '/usr/bin/nova-manage',\
+    \ 'cell_v2', 'update_cell',\n            '--cell_uuid', CELL0_ID,\n          \
+    \  '--database_connection', cell0_db,\n            '--transport-url', 'none:///'\n\
+    \        ]\n    else:\n        LOG.info('Creating cell0 with database connection\
+    \ \\'{}\\''.format(cell0_db))\n        cmd = [\n            '/usr/bin/nova-manage',\
+    \ 'cell_v2', 'map_cell0',\n             '--database_connection', cell0_db\n  \
+    \      ]\n    subprocess.check_call(cmd)\n\n    if DEFAULT_CELL_NAME in cells_by_name:\n\
+    \        LOG.info('Setting default cell database connection to \\'{}\\' and transport\
+    \ url to \\'{}\\''.format(\n            default_db, default_transport_url))\n\
+    \        cmd = [\n            '/usr/bin/nova-manage', 'cell_v2', 'update_cell',\n\
+    \            '--cell_uuid', cells_by_name[DEFAULT_CELL_NAME]['uuid'],\n      \
+    \      '--database_connection', default_db,\n            '--transport-url', default_transport_url\n\
+    \        ]\n    else:\n        LOG.info('Creating default cell with database connection\
+    \ \\'{}\\' and transport url \\'{}\\''.format(\n            default_db, default_transport_url))\n\
+    \        cmd = [\n            '/usr/bin/nova-manage', 'cell_v2', 'create_cell',\n\
+    \            '--name', DEFAULT_CELL_NAME,\n             '--database_connection',\
+    \ default_db,\n            '--transport-url', default_transport_url\n        ]\n\
+    \    subprocess.check_call(cmd)\n\n\ndef replace_db_name(db_url, db_name):\n \
+    \   return urlparse.urlparse(db_url)._replace(path=db_name).geturl()\n\n\nif __name__\
+    \ == '__main__':\n    if os.path.isfile(NOVA_CFG):\n        try:\n           \
+    \ config.read(NOVA_CFG)\n        except Exception:\n            LOG.exception('Error\
+    \ while reading nova.conf:')\n            sys.exit(1)\n    else:\n        LOG.error('Nova\
+    \ configuration file %s does not exist', NOVA_CFG)\n        sys.exit(1)\n\n  \
+    \  default_database_connection = config.get('database', 'connection')\n    cell0_database_connection\
+    \ = replace_db_name(default_database_connection, 'nova_cell0')\n    default_transport_url\
+    \ = config.get('DEFAULT', 'transport_url')\n\n    create_or_update_default_cells(\n\
+    \        template_url(cell0_database_connection),\n        template_url(default_database_connection),\n\
+    \        template_url(default_transport_url)\n    )\n"
+  mode: '0755'
+nova_wait_for_api_service.py:
+  content: "#!/usr/bin/python3\n#\n# Copyright 2018 Red Hat Inc.\n#\n# Licensed under\
+    \ the Apache License, Version 2.0 (the \"License\"); you may\n# not use this file\
+    \ except in compliance with the License. You may obtain\n# a copy of the License\
+    \ at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required\
+    \ by applicable law or agreed to in writing, software\n# distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS, WITHOUT\n# WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied. See the\n# License for the specific\
+    \ language governing permissions and limitations\n# under the License.\nimport\
+    \ argparse\nimport logging\nimport os\nimport six\nimport sys\nimport time\n\n\
+    \nfrom keystoneauth1 import loading\nfrom keystoneauth1 import session\n\nfrom\
+    \ novaclient import client\nfrom novaclient.exceptions import ClientException\n\
+    \n# In python3 SafeConfigParser was renamed to ConfigParser and the default\n\
+    # for duplicate options default to true. In case of nova it is valid to\n# have\
+    \ duplicate option lines, e.g. passthrough_whitelist which leads to\n# issues\
+    \ reading the nova.conf\n# https://bugs.launchpad.net/tripleo/+bug/1827775\nif\
+    \ six.PY3:\n    from six.moves.configparser import ConfigParser\n    config =\
+    \ ConfigParser(strict=False)\nelse:\n    from six.moves.configparser import SafeConfigParser\n\
+    \    config = SafeConfigParser()\n\ndebug = os.getenv('__OS_DEBUG', 'false')\n\
+    \nif debug.lower() == 'true':\n    loglevel = logging.DEBUG\nelse:\n    loglevel\
+    \ = logging.INFO\n\nlogging.basicConfig(stream=sys.stdout, level=loglevel)\nLOG\
+    \ = logging.getLogger('nova_wait_for_api_service')\n\niterations = 60\ntimeout\
+    \ = 10\nnova_cfg = '/etc/nova/nova.conf'\n\nif __name__ == '__main__':\n    parser\
+    \ = argparse.ArgumentParser(usage='%(prog)s [options]')\n    parser.add_argument('-k',\
+    \ '--insecure',\n                        action=\"store_false\",\n           \
+    \             dest='insecure',\n                        default=True,\n      \
+    \                  help='Allow insecure connection when using SSL')\n\n    args\
+    \ = parser.parse_args()\n    LOG.debug('Running with parameter insecure = %s',\n\
+    \              args.insecure)\n\n    if os.path.isfile(nova_cfg):\n        try:\n\
+    \            config.read(nova_cfg)\n        except Exception:\n            LOG.exception('Error\
+    \ while reading nova.conf:')\n    else:\n        LOG.error('Nova configuration\
+    \ file %s does not exist', nova_cfg)\n        sys.exit(1)\n\n    loader = loading.get_plugin_loader('password')\n\
+    \    auth = loader.load_from_options(\n        auth_url=config.get('neutron',\n\
+    \                            'auth_url'),\n        username=config.get('neutron',\n\
+    \                            'username'),\n        password=config.get('neutron',\n\
+    \                            'password'),\n        project_name=config.get('neutron',\n\
+    \                                'project_name'),\n        project_domain_name=config.get('neutron',\n\
+    \                                       'project_domain_name'),\n        user_domain_name=config.get('neutron',\n\
+    \                                    'user_domain_name'))\n    sess = session.Session(auth=auth,\
+    \ verify=args.insecure)\n\n    # Wait until this host is listed in the service\
+    \ list\n    for i in range(iterations):\n        try:\n            nova = client.Client('2.11',\
+    \ session=sess, endpoint_type='internal')\n            nova.versions.list()\n\
+    \            LOG.info('Nova-api service active')\n            sys.exit(0)\n  \
+    \      except ClientException:\n            LOG.info('Waiting for nova-api service')\n\
+    \        except Exception:\n            LOG.exception(\n                'Error\
+    \ while waiting for nova-api service')\n        time.sleep(timeout)\nsys.exit(1)\n\
+    \n# vim: set et ts=4 sw=4 :\n"
+  mode: '0755'
+pacemaker_mutex_restart_bundle.sh:
+  content: "#!/usr/bin/bash\n\n# pacemaker_mutex_restart_bundle.sh --lock mysql galera\
+    \ galera-bundle Master _\n# pacemaker_mutex_restart_bundle.sh --lock ovn_dbs ovndb_servers\
+    \ ovn-dbs-bundle Slave Master\n\nset -u\n\nusage() {\n    echo \"Restart a clustered\
+    \ resource in a coordinated way across the cluster\"\n    echo \"Usage:\"\n  \
+    \  echo \"   $0 --lock <tripleo-service> <pcmk-resource> <pcmk-bundle> <target-state-local>\
+    \ <target-state-cluster>\"\n    echo\n}\n\nlog() {\n    echo \"$(date -u): $1\"\
+    \n}\n\nerror() {\n    echo \"$(date -u): $1\" 1>&2\n    exit 1\n}\n\npacemaker_supports_promoted()\
+    \ {\n    # The Promoted token is only matched in recent pacemaker versions\n \
+    \   grep -wq \"<value>Promoted</value>\" /usr/share/pacemaker/resources-*.rng\n\
+    }\n\nACTION=$1\ncase $ACTION in\n    --help) usage; exit 0;;\n    --lock) ;;\n\
+    \    *) error \"Unknown action '$ACTION'\";;\nesac\n\nTRIPLEO_SERVICE=$2\nLOCK_NAME=${TRIPLEO_SERVICE}-restart-lock\n\
+    LOCK_OWNER=$(crm_node -n 2>/dev/null)\nrc=$?\nif [ $rc -ne 0 ]; then\n    if [\
+    \ $rc -eq 102 ]; then\n        log \"Cluster is not running locally, no need to\
+    \ restart resource $TRIPLEO_SERVICE\"\n        exit 0\n    else\n        error\
+    \ \"Unexpected error while connecting to the cluster (rc: $rc), bailing out\"\n\
+    \    fi\nfi\n\nRESOURCE_NAME=$3\nBUNDLE_NAME=$4\nWAIT_TARGET_LOCAL=$5\nWAIT_TARGET_ANYWHERE=${6:-_}\n\
+    \nif pacemaker_supports_promoted; then\n    WAIT_TARGET_LOCAL=$(echo \"$5\" |\
+    \ sed -e 's/Master/Promoted/' -e 's/Slave/Unpromoted/')\n    WAIT_TARGET_ANYWHERE=$(echo\
+    \ \"${6:-_}\" | sed -e 's/Master/Promoted/' -e 's/Slave/Unpromoted/')\n    promoted_role=\"\
+    Promoted\"\nelse\n    promoted_role=\"Master\"\nfi\n\n# The lock TTL should accomodate\
+    \ for the resource start/promote timeout\nif [ \"$RESOURCE_NAME\" != \"$BUNDLE_NAME\"\
+    \ ]; then\n    if [ \"$WAIT_TARGET_LOCAL\" = \"$promoted_role\" ] || [ \"$WAIT_TARGET_ANYWHERE\"\
+    \ = \"$promoted_role\" ]; then\n        rsc_op=\"promote\"\n    else\n       \
+    \ rsc_op=\"start\"\n    fi\n    # <op id=\"galera-promote-interval-0s\" interval=\"\
+    0s\" name=\"promote\" on-fail=\"block\" timeout=\"300s\"/>\n    PCMK_TTL=$(cibadmin\
+    \ -Q | xmllint -xpath \"string(//primitive[@id='${RESOURCE_NAME}']/operations/op[@name='${rsc_op}']/@timeout)\"\
+    \ - | sed 's/s$//')\n    LOCK_TTL=$((PCMK_TTL + 30))\nelse\n    # The podman RA's\
+    \ default start timeout\n    LOCK_TTL=90\nfi\n\nlog \"Acquire a ${LOCK_TTL}s restart\
+    \ lock for service $TRIPLEO_SERVICE before restarting it\"\n# Loop until we hold\
+    \ the lock. The lock has a TTL, so we're guaranteed to get it eventually\nrc=1\n\
+    while [ $rc -ne 0 ]; do\n    /var/lib/container-config-scripts/pacemaker_resource_lock.sh\
+    \ --acquire $LOCK_NAME $LOCK_OWNER $LOCK_TTL\n    rc=$?\n    if [ $rc != 0 ];\
+    \ then\n        if [ $rc -gt 1 ]; then\n            error \"Could not acquire\
+    \ lock due to unrecoverable error (rc: $rc), bailing out\"\n        else\n   \
+    \         log \"Could not acquire lock, retrying\"\n            sleep 10\n   \
+    \     fi\n    fi\ndone\n\nlog \"Restart the service $TRIPLEO_SERVICE locally\"\
+    \n# Reuse the local restart script in t-h-t (driven by env var TRIPLEO_MINOR_UPDATE)\n\
+    TRIPLEO_MINOR_UPDATE=true /var/lib/container-config-scripts/pacemaker_restart_bundle.sh\
+    \ $TRIPLEO_SERVICE $RESOURCE_NAME $BUNDLE_NAME $WAIT_TARGET_LOCAL $WAIT_TARGET_ANYWHERE\n\
+    \n# If we reached this point, always try to release the lock\nlog \"Release the\
+    \ restart lock for service $TRIPLEO_SERVICE\"\n/var/lib/container-config-scripts/pacemaker_resource_lock.sh\
+    \ --release $LOCK_NAME $LOCK_OWNER\nrc=$?\nif [ $rc -ne 0 ] && [ $rc -ne 1 ];\
+    \ then\n    error \"Could not release held lock (rc: $rc)\"\nfi\n"
+  mode: '0755'
+pacemaker_mutex_shutdown.sh:
+  content: "#!/usr/bin/bash\n\n# pacemaker_mutex_shutdown.sh --acquire\n# pacemaker_mutex_shutdown.sh\
+    \ --release\n\nset -u\n\nusage() {\n    echo \"Shutdown a cluster node in a coordinated\
+    \ way across the cluster\"\n    echo \"Usage:\"\n    echo \"   $0 --acquire #\
+    \ prevent other node from shutting down until we hold the lock\"\n    echo \"\
+    \   $0 --release # release the lock, other node can compete for the shutdown lock\"\
+    \n    echo\n}\n\nlog() {\n    echo \"$(date -u): $1\"\n}\n\nerror() {\n    echo\
+    \ \"$(date -u): $1\" 1>&2\n    exit 1\n}\n\n# Loop until we hold the lock. The\
+    \ lock has a TTL, so we're guaranteed to get it eventually\nshutdown_lock_acquire()\
+    \ {\n    local lockname=$1\n    local requester=$2\n    local ttl=$3\n    local\
+    \ rc=1\n    local current_owner\n    local owner_stopped\n    local owner_rc\n\
+    \n    log \"Acquiring the shutdown lock\"\n    while [ $rc -ne 0 ]; do\n     \
+    \   /var/lib/container-config-scripts/pacemaker_resource_lock.sh --acquire-once\
+    \ $lockname $requester $ttl\n        rc=$?\n        if [ $rc -ne 0 ]; then\n \
+    \           if [ $rc -eq 2 ]; then\n                error \"Could not acquire\
+    \ the shutdown lock due to unrecoverable error (rc: $rc), bailing out\"\n    \
+    \        else\n                # The lock is held by another node.\n         \
+    \       current_owner=$(/var/lib/container-config-scripts/pacemaker_resource_lock.sh\
+    \ --owner $lockname)\n                owner_rc=$?\n                if [ $owner_rc\
+    \ -eq 2 ]; then\n                    error \"Could not get the shutdown lock owner\
+    \ due to unrecoverable error (rc: $owner_rc), bailing out\"\n                fi\n\
+    \                if [ $owner_rc -eq 0 ]; then\n                    # If the owner\
+    \ is marked as offline, that means it has shutdown and\n                    #\
+    \ we can clean the lock preemptively and try to acquire it.\n                \
+    \    owner_stopped=$(crm_mon -1X | xmllint --xpath 'count(//nodes/node[@name=\"\
+    '${current_owner}'\" and @online=\"false\" and @unclean=\"false\"])' -)\n    \
+    \                if [ \"${owner_stopped}\" = \"1\" ]; then\n                 \
+    \       log \"Shutdown lock held by stopped node '${current_owner}', lock can\
+    \ be released\"\n                        /var/lib/container-config-scripts/pacemaker_resource_lock.sh\
+    \ --release $lockname $current_owner\n                        continue\n     \
+    \               fi\n                fi\n                log \"Shutdown lock held\
+    \ by another node (rc: $rc), retrying\"\n                sleep 10\n          \
+    \  fi\n        fi\n    done\n    log \"Shutdown lock acquired\"\n    return 0\n\
+    }\n\n\n# Release the lock if we still own it. Not owning it anymore is not fatal\n\
+    shutdown_lock_release() {\n    local lockname=$1\n    local requester=$2\n   \
+    \ local rc\n\n    log \"Releasing the shutdown lock\"\n    /var/lib/container-config-scripts/pacemaker_resource_lock.sh\
+    \ --release $lockname $requester\n    rc=$?\n    if [ $rc -ne 0 ]; then\n    \
+    \    if [ $rc -gt 1 ]; then\n            error \"Could not release the shutdown\
+    \ lock due to unrecoverable error (rc: $rc), bailing out\"\n        else\n   \
+    \         log \"Shutdown lock no longer held, nothing to do\"\n        fi\n  \
+    \  else\n        log \"Shutdown lock released\"\n    fi\n    return 0\n}\n\n\n\
+    ACTION=$1\nif [ -z \"$ACTION\" ]; then\n    error \"Action must be specified\"\
+    \nfi\n\nLOCK_NAME=tripleo-shutdown-lock\nLOCK_OWNER=$(crm_node -n 2>/dev/null)\n\
+    rc=$?\nif [ $rc -ne 0 ]; then\n    if [ $rc -eq 102 ]; then\n        log \"Cluster\
+    \ is not running locally, no need to aquire the shutdown lock\"\n        exit\
+    \ 0\n    else\n        error \"Unexpected error while connecting to the cluster\
+    \ (rc: $rc), bailing out\"\n    fi\nfi\n\n# We start with a very high TTL, that\
+    \ long enough to accomodate a cluster stop.\n# As soon as the node will get offline,\
+    \ the other competing node will be entitled\n# to steal the lock, so they should\
+    \ never wait that long in practice.\nLOCK_TTL=600\n\n\ncase $ACTION in\n    --help)\
+    \ usage; exit 0;;\n    --acquire|-a) shutdown_lock_acquire ${LOCK_NAME} ${LOCK_OWNER}\
+    \ ${LOCK_TTL};;\n    --release|-r) shutdown_lock_release ${LOCK_NAME} ${LOCK_OWNER};;\n\
+    \    *) error \"Invalid action\";;\nesac\nexit $?\n"
+  mode: '0755'
+pacemaker_resource_lock.sh:
+  content: "#!/usr/bin/bash\n\nMAX_RETRIES=10\nCIB_ENOTFOUND=105\n\nusage() {\n  \
+    \ echo \"Set a global property in the cluster with a validity timestamp.\"\n \
+    \  echo \"Usage:\"\n   echo \"   $0 --acquire <lock_name> <lock_owner> <lock_ttl_in_seconds>\"\
+    \n   echo \"   $0 --release <lock_name> <lock_owner>\"\n   echo\n}\n\nlog() {\n\
+    \    echo \"$(date -u): $1\" 1>&2\n}\n\nerror() {\n    echo \"$(date -u): $1\"\
+    \ 1>&2\n    exit 1\n}\n\nlock_create() {\n    local name=$1\n    local data=$2\n\
+    \    # cibadmin won't overwrite a key if someone else succeeded to create it concurrently\n\
+    \    cibadmin --sync-call --scope crm_config --create --xml-text \"<cluster_property_set\
+    \ id='${name}'><nvpair id='${name}-pair' name='${name}' value='${data}'/></cluster_property_set>\"\
+    \ &>/dev/null\n    return $?\n}\n\nlock_update() {\n    local name=$1\n    local\
+    \ expected_data=$2\n    local new_data=$3\n    # we only update the lock we expect\
+    \ to see, so we can't update someone else's lock\n    cibadmin --sync-call --scope\
+    \ crm_config --modify --xpath \"//cluster_property_set/nvpair[@name='${name}'\
+    \ and @value='${expected_data}']/..\" --xml-text \"<nvpair id='${name}-pair' name='${name}'\
+    \ value='${new_data}'/>\" &>/dev/null\n    return $?\n}\n\nlock_delete() {\n \
+    \   local name=$1\n    local expected_data=$2\n    # we only delete the lock we\
+    \ expect to see, so we can't delete someone else's lock\n    cibadmin --sync-call\
+    \ --scope crm_config --delete --xpath \"//cluster_property_set/nvpair[@name='${name}'\
+    \ and @value='${expected_data}']/..\" &>/dev/null\n    return $?\n}\n\nlock_get()\
+    \ {\n    local lockname=$1\n    local res\n    local rc\n    res=$(cibadmin --query\
+    \ --scope crm_config --xpath \"//cluster_property_set/nvpair[@name='$lockname']\"\
+    \ 2>/dev/null)\n    rc=$?\n    if [ $rc -eq 0 ]; then\n        echo \"$res\" |\
+    \ sed -n 's/.*value=\"\\([^\"]*\\)\".*/\\1/p'\n    fi\n    return $rc\n}\n\nlock_owner()\
+    \ {\n    local lock=$1\n    echo \"$lock\" | cut -d':' -f1\n}\n\nlock_has_expired()\
+    \ {\n    local lock=$1\n    local expiry=$(echo \"$lock\" | cut -d':' -f2)\n \
+    \   local now=$(date +%s)\n    test $now -ge $expiry\n}\n\n\n# Perform a lock\
+    \ action and restart if the CIB has been modified before\n# committing the lock\
+    \ action\ntry_action() {\n    local fun=$1\n    local lock=$2\n    local requester=$3\n\
+    \    local args=${4:-}\n    local tries=$MAX_RETRIES\n    local rc=1\n    if [\
+    \ \"$fun\" = \"lock_acquire\" ] || [ \"$fun\" = \"lock_release\" ]; then\n   \
+    \     log \"Try running $fun\"\n    else\n        return 2\n    fi\n    while\
+    \ [ $rc -ne 0 ]; do\n        $fun $lock $requester $args\n        rc=$?\n    \
+    \    if [ $rc -eq 0 ]; then\n            log \"Operation $1 succeeded\"\n    \
+    \        return 0\n        elif [ $rc -eq 3 ]; then\n            # rc == 3 ->\
+    \ CIB changed before push\n            if [ $tries -eq 0 ]; then\n           \
+    \     log \"Failed to commit after $MAX_RETRIES retries. Bailing out.\"\n    \
+    \            return 2\n            else\n                log \"Failed to commit.\
+    \ Retrying operation.\"\n                tries=$(($tries - 1))\n            fi\n\
+    \        elif [ $rc -eq 2 ]; then\n            # rc == 2 -> unrecoverable cib\
+    \ error (e.g. pacemaker down)\n            log \"Unexpected failure. Bailing out\"\
+    \n            return $rc\n        else\n            # rc == 1 -> lock error (not\
+    \ owner, lock doesn't exists)\n            return $rc\n        fi\n    done\n\
+    }\n\n# The lock mechanism uses cibadmin's atomic creation so cluster-wide\n# state\
+    \ coherency is guaranteed by pacemaker\nlock_acquire() {\n    local lockname=$1\n\
+    \    local requester=$2\n    local ttl=$3\n    local rc\n    local lock\n    local\
+    \ expiry\n    local owner\n\n    log \"Check whether the lock is already held\
+    \ in the CIB\"\n    lock=$(lock_get $lockname)\n    rc=$?\n    if [ $rc -ne 0\
+    \ ] && [ $rc -ne $CIB_ENOTFOUND ]; then\n        log \"Could not retrieve info\
+    \ from the CIB\"\n        return 2\n    fi\n\n    if [ -n \"$lock\" ]; then\n\
+    \        lock_has_expired $lock\n        rc=$?\n        if [ $rc -eq 0 ]; then\n\
+    \            log \"Lock has expired, now available for being held\"\n        else\n\
+    \            # lock is still held. check whether we're the owner\n           \
+    \ owner=$(lock_owner $lock)\n            if [ \"$owner\" = \"$requester\" ];then\n\
+    \                log \"Requester already owns the lock, acquiring attempt will\
+    \ just reconfigure the TTL\"\n            else\n                log \"Lock is\
+    \ held by someone else ($owner)\"\n                return 1\n            fi\n\
+    \        fi\n    else\n        log \"Lock is not held yet\"\n    fi\n\n    # prepare\
+    \ the lock info\n    expiry=$(($(date +%s) + $ttl))\n\n    if [ -n \"$lock\" ];\
+    \ then\n        log \"Attempting to update the lock\"\n        lock_update $lockname\
+    \ \"$lock\" \"$requester:$expiry\"\n        rc=$?\n    else\n        log \"Attempting\
+    \ to acquire the lock\"\n        lock_create $lockname \"$requester:$expiry\"\n\
+    \        rc=$?\n    fi\n\n    if [ $rc -eq 0 ]; then\n        log \"Lock '$lockname'\
+    \ acquired by '$requester', valid until $(date -d @$expiry)\"\n        return\
+    \ 0\n    else\n        log \"CIB changed, lock cannot be acquired\"\n        return\
+    \ 3\n    fi\n}\n\n\n# The lock mechanism uses the CIB's num_updates tag to implement\n\
+    # a conditional store. Cluster-wide locking is guaranteed by pacemaker\nlock_release()\
+    \ {\n    local lockname=$1\n    local requester=$2\n    local rc\n    local lock\n\
+    \    local owner\n\n    log \"Check whether the lock is already held in the CIB\"\
+    \n    lock=$(lock_get $lockname)\n    rc=$?\n    if [ $rc -ne 0 ] && [ $rc -ne\
+    \ $CIB_ENOTFOUND ]; then\n        log \"Could not retrieve info from the CIB\"\
+    \n        return 2\n    fi\n\n    if [ -z \"$lock\" ]; then\n        log \"Lock\
+    \ doesn't exist. Nothing to release\"\n        return 0\n    else\n        log\
+    \ \"Lock exists, check whether we're the owner\"\n        owner=$(lock_owner $lock)\n\
+    \        if [ \"$owner\" != \"$requester\" ];then\n            log \"Lock is held\
+    \ by someone else ($owner), will not unlock\"\n            return 1\n        fi\n\
+    \    fi\n\n    lock_delete $lockname \"$lock\"\n    rc=$?\n\n    if [ $rc -eq\
+    \ 0 ]; then\n        log \"Lock '$lockname' released by '$requester'\"\n     \
+    \   return 0\n    else\n        log \"CIB deletion error, lock cannot be released\"\
+    \n        return 3\n    fi\n}\n\n\n# Retrieve the owner of a lock from the CIB\n\
+    # this is a read-only operation, so no need to log debug info\nlock_get_owner()\
+    \ {\n    local lockname=$1\n    local rc\n    local lock\n    local owner\n\n\
+    \    lock=$(lock_get $lockname)\n    rc=$?\n    if [ $rc -ne 0 ] && [ $rc -ne\
+    \ $CIB_ENOTFOUND ]; then\n        return 2\n    fi\n\n    if [ -z \"$lock\" ];\
+    \ then\n        return 1\n    else\n        lock_owner $lock\n        return 0\n\
+    \    fi\n}\n\n\nACTION=$1\nLOCKNAME=$2\nREQUESTER=$3\nTTL=${4:-60}\n\nif [ -z\
+    \ \"$ACTION\" ]; then\n    error \"Action must be specified\"\nfi\n\nif [ $ACTION\
+    \ != \"--help\" ]; then\n    if [ -z \"$LOCKNAME\" ]; then\n        error \"You\
+    \ must specific a lock name\"\n    fi\n    if [ $ACTION != \"--owner\" ] && [\
+    \ $ACTION != \"-o\" ]; then\n        if [ -z \"$REQUESTER\" ]; then\n        \
+    \    error \"You must specific a lock requester\"\n        fi\n    fi\nfi\n\n\
+    case $ACTION in\n    --help) usage; exit 0;;\n    --acquire|-a) try_action lock_acquire\
+    \ $LOCKNAME $REQUESTER $TTL;;\n    --release|-r) try_action lock_release $LOCKNAME\
+    \ $REQUESTER;;\n    --acquire-once|-A) lock_acquire $LOCKNAME $REQUESTER $TTL;;\n\
+    \    --owner|-o) lock_get_owner $LOCKNAME;;\n    *) error \"Invalid action\";;\n\
+    esac\nexit $?\n"
+  mode: '0755'
+pacemaker_restart_bundle.sh:
+  content: "#!/usr/bin/bash\n\nset -u\n\n# ./pacemaker_restart_bundle.sh mysql galera\
+    \ galera-bundle Master _\n# ./pacemaker_restart_bundle.sh redis redis redis-bundle\
+    \ Slave Master\n# ./pacemaker_restart_bundle.sh ovn_dbs ovndb_servers ovn-dbs-bundle\
+    \ Slave Master\nRESTART_SCRIPTS_DIR=$(dirname $0)\nTRIPLEO_SERVICE=$1\nRESOURCE_NAME=$2\n\
+    BUNDLE_NAME=$3\nWAIT_TARGET_LOCAL=$4\nWAIT_TARGET_ANYWHERE=${5:-_}\nTRIPLEO_MINOR_UPDATE=\"\
+    ${TRIPLEO_MINOR_UPDATE:-false}\"\nTRIPLEO_HA_WRAPPER_RESOURCE_EXISTS=\"${TRIPLEO_HA_WRAPPER_RESOURCE_EXISTS:-false}\"\
+    \n\nbundle_can_be_restarted() {\n    local bundle=$1\n    # As long as the resource\
+    \ bundle is managed by pacemaker and is\n    # not meant to stay stopped, no matter\
+    \ the state of any inner\n    # pcmk_remote or ocf resource, we should restart\
+    \ it to give it a\n    # chance to read the new config.\n    [ \"$(crm_resource\
+    \ --meta -r $1 -g is-managed 2>/dev/null)\" != \"false\" ] && \\\n    [ \"$(crm_resource\
+    \ --meta -r $1 -g target-role 2>/dev/null)\" != \"Stopped\" ]\n}\n\nlog() {\n\
+    \    local msg=$1\n    logger -t pcmkrestart \"$1\"\n}\n\nHOSTNAME=$(/bin/hostname\
+    \ -s)\nif [ x\"${TRIPLEO_MINOR_UPDATE,,}\" != x\"true\" ]; then\n    if [ x\"\
+    ${TRIPLEO_HA_WRAPPER_RESOURCE_EXISTS,,}\" = x\"false\" ]; then\n        # Do not\
+    \ restart during initial deployment, as the resource\n        # has just been\
+    \ created.\n        SERVICE_NODEID=$(/bin/hiera -c /etc/puppet/hiera.yaml \"${TRIPLEO_SERVICE}_short_bootstrap_node_name\"\
+    )\n        if [[ \"${HOSTNAME,,}\" == \"${SERVICE_NODEID,,}\" ]]; then\n     \
+    \       log \"Initial deployment, skipping the restart of ${BUNDLE_NAME}\"\n\t\
+    fi\n        exit 0\n    else\n        # During a stack update, this script is\
+    \ called in parallel on\n        # every node the resource runs on, after the\
+    \ service's configs\n        # have been updated on all nodes. So we need to run\
+    \ pcs only\n        # once (e.g. on the service's boostrap node).\n        if\
+    \ bundle_can_be_restarted ${BUNDLE_NAME}; then\n            SERVICE_NODEID=$(/bin/hiera\
+    \ -c /etc/puppet/hiera.yaml \"${TRIPLEO_SERVICE}_short_bootstrap_node_name\")\n\
+    \            if [[ \"${HOSTNAME,,}\" == \"${SERVICE_NODEID,,}\" ]]; then\n   \
+    \             replicas_running=$(crm_resource -Q -r $BUNDLE_NAME --locate 2>&1\
+    \ | wc -l)\n                if [ \"$replicas_running\" != \"0\" ]; then\n    \
+    \                log \"Restarting ${BUNDLE_NAME} globally. Stopping:\"\n     \
+    \               /sbin/pcs resource disable --wait=600 $BUNDLE_NAME\n         \
+    \           log \"Restarting ${BUNDLE_NAME} globally. Starting:\"\n          \
+    \          /sbin/pcs resource enable --wait=600 $BUNDLE_NAME\n               \
+    \ else\n                    log \"${BUNDLE_NAME} is not running anywhere,\" \\\
+    \n                         \"cleaning up to restart it globally if necessary\"\
+    \n                    /sbin/pcs resource cleanup $BUNDLE_NAME\n              \
+    \  fi\n            else\n                log \"Skipping global restart of ${BUNDLE_NAME}\
+    \ on ${HOSTNAME} it will be restarted by node ${SERVICE_NODEID}\"\n          \
+    \  fi\n\n        else\n            log \"No global restart needed for ${BUNDLE_NAME}.\"\
+    \n        fi\n    fi\nelse\n    # During a minor update workflow however, a host\
+    \ gets fully\n    # updated before updating the next one. So unlike stack\n  \
+    \  # update, at the time this script is called, the service's\n    # configs aren't\
+    \ updated on all nodes yet. So only restart the\n    # resource locally, where\
+    \ it's guaranteed that the config is\n    # up to date.\n    HOST=$(facter hostname)\n\
+    \n    if bundle_can_be_restarted ${BUNDLE_NAME}; then\n\t# if the resource is\
+    \ running locally, restart it\n\tif crm_resource -r $BUNDLE_NAME --locate 2>&1\
+    \ | grep -w -q \"${HOST}\"; then\n            log \"Restarting ${BUNDLE_NAME}\
+    \ locally on '${HOST}'\"\n            /sbin/pcs resource restart $BUNDLE_NAME\
+    \ \"${HOST}\"\n\n\telse\n\t    # At this point, if no resource is running locally,\
+    \ it's\n\t    # either because a) it has failed previously, or b) because\n\t\
+    \    # it's an A/P resource running elsewhere.\n\t    # By cleaning up resource,\
+    \ we ensure that a) it will try to\n\t    # restart, or b) it won't do anything\
+    \ if the resource is\n\t    # already running elsewhere.\n            log \"${BUNDLE_NAME}\
+    \ is currently not running on '${HOST}',\" \\\n                 \"cleaning up\
+    \ its state to restart it if necessary\"\n            /sbin/pcs resource cleanup\
+    \ $BUNDLE_NAME node=\"${HOST}\"\n\tfi\n\n\t# Wait until the resource is in the\
+    \ expected target state\n\t$RESTART_SCRIPTS_DIR/pacemaker_wait_bundle.sh \\\n\
+    \            $RESOURCE_NAME $BUNDLE_NAME \\\n            \"$WAIT_TARGET_LOCAL\"\
+    \ \"$WAIT_TARGET_ANYWHERE\" \\\n\t    \"${HOST}\" 600\n    else\n        log \"\
+    No restart needed for ${BUNDLE_NAME}.\"\n    fi\nfi\n"
+  mode: '0755'
+pacemaker_wait_bundle.sh:
+  content: "#!/usr/bin/bash\n\n# ----\n# Wait for an OCF resource or a bundle to be\
+    \ restarted\n# ----\n# e.g.:\n# M/S OCF:      $0 galera galera-bundle Master\n\
+    # clone OCF:    $0 rabbitmq rabbitmq-bundle Started\n# A/P M/S OCF:  $0 redis\
+    \ redis-bundle Slave Master\n# A/P bundle:   $0 openstack-cinder-volume openstack-cinder-volume\
+    \ _ Started\n# clone bundle: $0 haproxy-bundle haproxy-bundle Started\n\n# design\
+    \ note 1:\n#  - this script is called during a minor update; it is called\n# \
+    \   once per node that hosts a service replica.\n#  - the purpose of this script\
+    \ is to ensure that restarting the\n#    service replica locally won't disrupt\
+    \ the service availability\n#    for the end user. To reach that goal, the script\
+    \ waits until the\n#    service is restarted locally or globallu and reaches a\
+    \ given\n#    target state (i.e. Started, Slave or Master).\n# design note 2:\n\
+    #   - we don't want to track restart error: our only job is to ensure\n#     service\
+    \ restart synchronization, not service health.\n#   - In particular, we don't\
+    \ want to error out in case the resource\n#     cannot be restarted locally, because\
+    \ that would make the minor\n#     update fail, even if potentially other replicas\
+    \ still provide\n#     the service.\n# design note 3:\n#   - we can bail out early\
+    \ if we determine that the resource can't\n#     be restarted automatically by\
+    \ pacemaker (e.g. its \"blocked\",\n#     unmanaged or disabled).\n\nlog() {\n\
+    \    local msg=$1\n    echo \"$(date -u): $1\"\n}\n\nusage() {\n    echo 2>&1\
+    \ \"Usage: $0 NAME BUNDLE_NAME ROLE_LOCAL [ROLE_ANYWHERE] [HOST] [TIMEOUT]\"\n\
+    \    exit 1\n}\n\npacemaker_supports_promoted() {\n    # The Promoted token is\
+    \ only matched in recent pacemaker versions\n    grep -wq \"<value>Promoted</value>\"\
+    \ /usr/share/pacemaker/resources-*.rng\n}\n\n#\n# Utility functions to detect\
+    \ stuck resources\n#\n\nbundle_failures_locally() {\n    local engine=$BUNDLE_CONTAINER_ENGINE\n\
+    \    local replicas=$BUNDLE_REPLICAS\n    local last=$(($replicas - 1))\n    local\
+    \ replica_name\n    for i in $(seq 0 $last); do\n\treplica_name=${BUNDLE_NAME}-${engine}-${i}\n\
+    \tcrm_failcount -q -G -r $replica_name -N $HOST\n    done\n}\n\nbundle_failures_globally()\
+    \ {\n    local engine=$BUNDLE_CONTAINER_ENGINE\n    local replicas=$BUNDLE_REPLICAS\n\
+    \    local last=$(($replicas - 1))\n    for i in $(seq 0 $last); do\n\tcrm_failcount\
+    \ -q -G -r ${BUNDLE_NAME}-${engine}-${i}\n    done\n}\n\nbundle_running_globally()\
+    \ {\n    local engine=$BUNDLE_CONTAINER_ENGINE\n    # return the number of running\
+    \ bundles replica, i.e. the number of\n    # docker/podman resource replicas currently\
+    \ running in the cluster\n    crm_mon --as-xml | xmllint --xpath \"count(//resources/bundle[@id='${BUNDLE_NAME}']/replica/resource[@resource_agent='${OCF}:heartbeat:${engine}']/node)\"\
+    \ -\n}\n\nocf_failures_globally() {\n    local replicas=$BUNDLE_REPLICAS\n   \
+    \ local last=$(($replicas - 1))\n    local bundle_node\n    for i in $(seq 0 $last);\
+    \ do\n\tbundle_node=${BUNDLE_NAME}-${i}\n\tcrm_failcount -q -G -r $NAME -N $bundle_node\n\
+    \    done\n}\n\ndid_resource_failed_locally() {\n    local failures\n    local\
+    \ running\n    local remotehost\n    if [ \"${NAME}\" != \"${BUNDLE_NAME}\" ];\
+    \ then\n\t# if we're dealing with an ocf resource, it is running on a\n\t# pacemaker_remote\
+    \ rather that on the real host, and the\n\t# failcounts are thus associated to\
+    \ the pcmk remote. Replace\n\t# the host's name with the pcmk remote's name.\n\
+    \        remotehost=$(crm_mon --as-xml | xmllint --xpath \"string(//resources/bundle[@id='${BUNDLE_NAME}']/replica/resource/node[@name='${HOST}']/../../resource[@resource_agent='${OCF}:pacemaker:remote']/@id)\"\
+    \ -)\n\tif [ -n \"${remotehost}\" ]; then\n\t    crm_failcount -q -G -r $NAME\
+    \ -N $remotehost | grep -q -w INFINITY\n\t    return $?\n\tfi\n\t# If no pcmk\
+    \ remote is currently running, the failcount from\n\t# the ocf resource is useless,\
+    \ compute the failcount from the\n\t# bundle case instead (computed below).\n\
+    \    fi\n\n    # for bundles, pacemaker can run any bundle replica locally\n \
+    \   # (e.g. galera-bundle-docker-{0,1,2}), and a failure happens when\n    # there\
+    \ are no more replica to try.\n    # That is, when _at least_ one replica failed\
+    \ locally, and all the\n    # others either failed or are currently running elsewhere.\n\
+    \    failures=$(bundle_failures_locally $HOST | grep -c -w INFINITY)\n    running=$(bundle_running_globally)\n\
+    \    test $failures -gt 0 && \\\n    test $(( $failures + $running )) -ge $BUNDLE_REPLICAS\n\
+    }\n\ndid_resource_failed_globally() {\n    local remotecount\n    local failures\n\
+    \    if [ \"${NAME}\" != \"${BUNDLE_NAME}\" ]; then\n\t# we check the state of\
+    \ an ocf resource only if the\n\t# pcmkremotes are started\n        remotecount=$(crm_mon\
+    \ --as-xml | xmllint --xpath \"count(//resources/bundle[@id='${BUNDLE_NAME}']/replica/resource[@resource_agent='${OCF}:pacemaker:remote']/node)\"\
+    \ -)\n\tif [ \"${remotecount}\" = \"0\" ]; then\n\t    # no pcmkremote is running,\
+    \ so check the bundle state\n\t    # instead of checking the ocf resource\n\t\
+    \    # bundle failed if all ${BUNDLE_REPLICAS} replicas failed\n\t    failures=$(bundle_failures_globally\
+    \ | grep -c -w INFINITY)\n\t    test $failures -eq $BUNDLE_REPLICAS\n\telse\n\t\
+    \    # ocf resource failed if it failed to start on\n\t    # all $BUNDLE_REPLICAS\
+    \ bundle nodes\n\t    failures=$(ocf_failures_globally | grep -c -w INFINITY)\n\
+    \t    test $failures -eq $BUNDLE_REPLICAS\n\tfi\n    else\n\t# bundle failed if\
+    \ all ${BUNDLE_REPLICAS} replicas failed\n\tfailures=$(bundle_failures_globally\
+    \ | grep -c -w INFINITY)\n\ttest $failures -eq $BUNDLE_REPLICAS\n    fi\n}\n\n\
+    \n# Input validation\n#\n\nNAME=$1\nif [ -z \"${NAME}\" ]; then\n    echo 2>&1\
+    \ \"Error: argument NAME must not be empty\"\n    exit 1\nfi\n\nBUNDLE_NAME=$2\n\
+    if [ -z \"${BUNDLE_NAME}\" ]; then\n    echo 2>&1 \"Error: argument BUNDLE_NAME\
+    \ must not be empty\"\n    exit 1\nfi\n\nROLE_LOCAL=$3\nif [ \"${ROLE_LOCAL}\"\
+    \ = \"_\" ]; then\n    ROLE_LOCAL=\"\"\nfi\n\nROLE_ANYWHERE=$4\nif [ \"${ROLE_ANYWHERE}\"\
+    \ = \"_\" ]; then\n    ROLE_ANYWHERE=\"\"\nfi\n\nif [ -z \"${ROLE_LOCAL}\" ];\
+    \ then\n    if [ -z \"${ROLE_ANYWHERE}\" ]; then\n        echo 2>&1 \"Error: either\
+    \ ROLE_LOCAL or ROLE_ANYWHERE must be non empty\"\n        exit 1\n    fi\nelse\n\
+    \    if !(echo \"${ROLE_LOCAL}\" | grep -q -x -E \"(Started|Slave|Master|Unpromoted|Promoted)\"\
+    ); then\n        echo 2>&1 \"Error: argument ROLE_LOCAL must be either 'Started'\
+    \ 'Slave' 'Master' 'Unpromoted' or 'Promoted'\"\n        exit 1\n    fi\nfi\n\n\
+    if [ -n \"${ROLE_ANYWHERE}\" ] && !(echo \"${ROLE_ANYWHERE}\" | grep -q -x -E\
+    \ \"(Started|Slave|Master|Unpromoted|Promoted)\"); then\n    echo 2>&1 \"Error:\
+    \ argument ROLE_ANYWHERE must be either 'Started' 'Slave' 'Master' 'Unpromoted'\
+    \ or 'Promoted'\"\n    exit 1\nfi\n\n# Ensure compatibility with pacemaker 2.1\n\
+    if pacemaker_supports_promoted; then\n    ROLE_LOCAL=$(echo \"$ROLE_LOCAL\" |\
+    \ sed -e 's/Master/Promoted/' -e 's/Slave/Unpromoted/')\n    ROLE_ANYWHERE=$(echo\
+    \ \"$ROLE_ANYWHERE\" | sed -e 's/Master/Promoted/' -e 's/Slave/Unpromoted/')\n\
+    \    OCF=\"ocf\"\nelse\n    OCF=\"ocf:\"\nfi\n\nHOST=${5:-$(facter hostname)}\n\
+    TIMEOUT=${6:-600}\n\n\n# Configure the search\n# ----\n# Note: we can't use crm_resource\
+    \ in all searches because we can't\n# easily extract the host the OCF resources\
+    \ run on (crm_resource\n# returns the pcmk-remote nodes rather than the hosts)\n\
+    # So instead, we implement various searches with XPath directly.\n\nif [ \"${BUNDLE_NAME}\"\
+    \ != \"${NAME}\" ]; then\n# ocf resource\nlocal_resource_xpath=\"//bundle/replica/resource[@resource_agent='${OCF}:pacemaker:remote']/node[@name='${HOST}']/../../resource[@id='${NAME}']\"\
+    \nany_resource_xpath=\"//bundle//resource[@id='${NAME}']\"\nreplicas_xpath=\"\
+    //bundle/primitive[@id='${BUNDLE_NAME}']/../*[boolean(@image) and boolean(@replicas)]\"\
+    \nelse\n# bundle resource\nlocal_resource_xpath=\"//bundle[@id='${NAME}']/replica/resource/node[@name='${HOST}']/../../resource\"\
+    \nany_resource_xpath=\"//bundle[@id='${NAME}']//resource\"\nreplicas_xpath=\"\
+    //bundle[@id='${BUNDLE_NAME}']/*[boolean(@image) and boolean(@replicas)]\"\nfi\n\
+    \nbundle_def_xpath=\"//bundle[@id='${BUNDLE_NAME}']/*[boolean(@image) and boolean(@replicas)]\"\
+    \nBUNDLE_CONTAINER_ENGINE=$(cibadmin -Q | xmllint --xpath \"name(${bundle_def_xpath})\"\
+    \ -)\nBUNDLE_REPLICAS=$(cibadmin -Q | xmllint --xpath \"string(${bundle_def_xpath}/@replicas)\"\
+    \ -)\n\n\n# The wait algorithm follows a two-stage approach\n#  1. Depending on\
+    \ how the script is called, we first check whether\n#     the resource is restarted\
+    \ locally. An A/P resource may be\n#     restarted elsewhere in the cluster.\n\
+    #  2. If needed, check whether the A/P resource has restarted\n#     elsewhere.\
+    \ For A/P M/S resources, in case the resource is\n#     restarted as Slave locally,\
+    \ ensure a Master is available.\n\nsuccess=1\nbailout=1\ntimeout=$TIMEOUT\nrole=\"\
+    \"\n\n# Stage 1: local check\nif [ -n \"$ROLE_LOCAL\" ]; then\n    log \"Waiting\
+    \ until ${NAME} has restarted on ${HOST} and is in state ${ROLE_LOCAL}\"\n   \
+    \ log \"Will probe resource state with the following XPath pattern: ${local_resource_xpath}\"\
+    \n\n    while [ $timeout -gt 0 ] && [ $bailout -ne 0 ] && [ $success -ne 0 ];\
+    \ do\n        resource=$(crm_mon -r --as-xml | xmllint --xpath \"${local_resource_xpath}\"\
+    \ - 2>/dev/null)\n        role=$(echo \"${resource}\" | sed -ne 's/.*\\Wrole=\"\
+    \\([^\"]*\\)\".*/\\1/p')\n\n\tif [ \"$(crm_resource --meta -r ${NAME} -g is-managed\
+    \ 2>/dev/null)\" = \"false\" ]; then\n            log \"${NAME} is unmanaged,\
+    \ will never reach target role. Bailing out\"\n            bailout=0\n       \
+    \     continue\n\telif [ \"$(crm_resource --meta -r ${NAME} -g target-role 2>/dev/null)\"\
+    \ = \"Stopped\" ]; then\n            log \"${NAME} is disabled, will never reach\
+    \ target role. Bailing out\"\n            bailout=0\n            continue\n  \
+    \      elif echo \"${resource}\" | grep -q -w \"\\Wblocked=\\\"true\\\"\"; then\n\
+    \            log \"${NAME} is blocked, will never reach target role. Bailing out\"\
+    \n            bailout=0\n            continue\n\telif did_resource_failed_locally;\
+    \ then\n            log \"${NAME} is in failed state, will never reach target\
+    \ role. Bailing out\"\n            bailout=0\n            continue\n        elif\
+    \ [ \"$role\" = \"$ROLE_LOCAL\" ]; then\n            success=0\n            continue\n\
+    \        elif [ -n \"$ROLE_ANYWHERE\" ] && [ \"$role\" = \"$ROLE_ANYWHERE\" ];\
+    \ then\n            # A/P: we are restarted in the expected state\n          \
+    \  success=0\n            continue\n        else\n            log \"Waiting for\
+    \ ${NAME} to transition to role ${ROLE_LOCAL} on ${HOST}\"\n        fi\n\n   \
+    \     if [ $bailout -ne 0 ] && [ $success -ne 0 ]; then\n            sleep 4\n\
+    \            timeout=$((timeout-4))\n        fi\n    done\nfi\n\n# Stage 2: global\
+    \ check\nif [ $timeout -gt 0 ] && [ -n \"$ROLE_ANYWHERE\" ] && [ \"$role\" !=\
+    \ \"$ROLE_ANYWHERE\" ]; then\n    log \"Wait until ${NAME} is restarted anywhere\
+    \ in the cluster in state ${ROLE_ANYWHERE}\"\n    log \"Will probe resource state\
+    \ with the following XPath pattern: ${any_resource_xpath}\"\n\n    success=1\n\
+    \    bailout=1\n    while [ $timeout -gt 0 ] && [ $bailout -ne 0 ] && [ $success\
+    \ -ne 0 ]; do\n        resources=$(crm_mon -r --as-xml | xmllint --xpath \"${any_resource_xpath}\"\
+    \ - 2>/dev/null)\n\tif [ \"$(crm_resource --meta -r ${NAME} -g is-managed 2>/dev/null)\"\
+    \ = \"false\" ]; then\n            log \"${NAME} is unmanaged, will never reach\
+    \ target role. Bailing out\"\n            bailout=0\n            continue\n\t\
+    elif [ \"$(crm_resource --meta -r ${NAME} -g target-role 2>/dev/null)\" = \"Stopped\"\
+    \ ]; then\n            log \"${NAME} is disabled, will never reach target role.\
+    \ Bailing out\"\n            bailout=0\n            continue\n        elif ! (echo\
+    \ \"${resources}\" | grep -q -w \"\\Wblocked=\\\"false\\\"\"); then\n        \
+    \    log \"${NAME} blocked, will never reach target role. Bailing out\"\n    \
+    \        bailout=0\n            continue\n\telif did_resource_failed_globally;\
+    \ then\n            log \"${NAME} is in failed state, will never reach target\
+    \ role. Bailing out\"\n            bailout=0\n            continue\n        elif\
+    \ echo \"${resources}\" | grep -q -w \"\\Wrole=\\\"${ROLE_ANYWHERE}\\\"\"; then\n\
+    \            success=0\n            continue\n        else\n            log \"\
+    Waiting for ${NAME} to transition to role ${ROLE_ANYWHERE} anywhere in the cluster\"\
+    \n        fi\n\n        if [ $bailout -ne 0 ] && [ $success -ne 0 ]; then\n  \
+    \          sleep 4\n            timeout=$((timeout-4))\n        fi\n    done\n\
+    fi\n\nif [ $timeout -le 0 ]; then\n    log \"Timeout reached after ${TIMEOUT}s\
+    \ while waiting for ${NAME} to be restarted\"\nelif [ $bailout -le 0 ]; then\n\
+    \    log \"Restart monitoring for ${NAME} cancelled\"\nfi\n\nif [ $success -eq\
+    \ 0 ]; then\n    log \"${NAME} successfully restarted\"\nelse\n    log \"${NAME}\
+    \ was not restarted properly\"\nfi\n\n# Don't block minor update or stack update\
+    \ if the wait was unsuccessful\nexit 0\n"
+  mode: '0755'
+placement_wait_for_service.py:
+  content: "#!/usr/bin/python3\n#\n# Copyright 2018 Red Hat Inc.\n#\n# Licensed under\
+    \ the Apache License, Version 2.0 (the \"License\"); you may\n# not use this file\
+    \ except in compliance with the License. You may obtain\n# a copy of the License\
+    \ at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required\
+    \ by applicable law or agreed to in writing, software\n# distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS, WITHOUT\n# WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied. See the\n# License for the specific\
+    \ language governing permissions and limitations\n# under the License.\n\n# shell\
+    \ script to check if placement API is up after X attempts.\n# Default max is 60\
+    \ iterations with 10s (default) timeout in between.\n\nimport logging\nimport\
+    \ os\nimport re\nimport six\nimport sys\nimport time\n\nfrom keystoneauth1.identity\
+    \ import v3\nfrom keystoneauth1 import session\nfrom keystoneclient.v3 import\
+    \ client\nimport requests\n\n# In python3 SafeConfigParser was renamed to ConfigParser\
+    \ and the default\n# for duplicate options default to true. In case of nova it\
+    \ is valid to\n# have duplicate option lines, e.g. passthrough_whitelist which\
+    \ leads to\n# issues reading the nova.conf\n# https://bugs.launchpad.net/tripleo/+bug/1827775\n\
+    if six.PY3:\n    from six.moves.configparser import ConfigParser\n    config =\
+    \ ConfigParser(strict=False)\nelse:\n    from six.moves.configparser import SafeConfigParser\n\
+    \    config = SafeConfigParser()\n\n\ndebug = os.getenv('__OS_DEBUG', 'false')\n\
+    \nif debug.lower() == 'true':\n    loglevel = logging.DEBUG\nelse:\n    loglevel\
+    \ = logging.INFO\n\nlogging.basicConfig(stream=sys.stdout, level=loglevel)\nLOG\
+    \ = logging.getLogger('placement_wait_for_service')\n\niterations = 60\ntimeout\
+    \ = 10\nplacement_cfg = '/etc/placement/placement.conf'\n\nif __name__ == '__main__':\n\
+    \    if os.path.isfile(placement_cfg):\n        try:\n            config.read(placement_cfg)\n\
+    \        except Exception:\n            LOG.exception('Error while reading placement.conf:')\n\
+    \    else:\n        LOG.error('Placement configuration file %s does not exist',\n\
+    \                  placement_cfg)\n        sys.exit(1)\n\n    # get keystone client\
+    \ with details from [keystone_authtoken] section\n    auth = v3.Password(\n  \
+    \      user_domain_name=config.get('keystone_authtoken', 'user_domain_name'),\n\
+    \        username=config.get('keystone_authtoken', 'username'),\n        password=config.get('keystone_authtoken',\
+    \ 'password'),\n        project_name=config.get('keystone_authtoken', 'project_name'),\n\
+    \        project_domain_name=config.get('keystone_authtoken',\n              \
+    \                         'project_domain_name'),\n        auth_url=config.get('keystone_authtoken',\
+    \ 'auth_url') + '/v3')\n    sess = session.Session(auth=auth, verify=False)\n\
+    \    keystone = client.Client(session=sess, interface='internal')\n\n    iterations_endpoint\
+    \ = iterations\n    placement_endpoint_url = None\n    while iterations_endpoint\
+    \ > 1:\n        iterations_endpoint -= 1\n        try:\n            # get placement\
+    \ service id\n            placement_service_id = keystone.services.list(\n   \
+    \             name='placement')[0].id\n\n            # get placement endpoint\n\
+    \            # Note: puppet-placement does not support setting the interface\n\
+    \            #       until we have https://review.opendev.org/688862.\n      \
+    \      #       Lets hard code 'internal' for now.\n            placement_endpoint_url\
+    \ = keystone.endpoints.list(\n                service=placement_service_id,\n\
+    \                region=config.get('keystone_authtoken', 'region_name'),\n   \
+    \             interface='internal')[0].url\n            if not placement_endpoint_url:\n\
+    \                LOG.error('Failed to get placement service endpoint!')\n    \
+    \        else:\n                break\n        except Exception:\n           \
+    \ LOG.exception('Retry - Failed to get placement service endpoint:')\n       \
+    \ time.sleep(timeout)\n\n    if not placement_endpoint_url:\n        LOG.error('Failed\
+    \ to get placement service endpoint!')\n        sys.exit(1)\n\n    # we should\
+    \ have CURRENT in the request response from placement:\n    # {\"versions\": [{\"\
+    status\": \"CURRENT\", \"min_version\": \"1.0\", \"max_version\":\n    # \"1.29\"\
+    , \"id\": \"v1.0\", \"links\": [{\"href\": \"\", \"rel\": \"self\"}]}]}\n    response_reg\
+    \ = re.compile('.*CURRENT,*')\n\n    while iterations > 1:\n        iterations\
+    \ -= 1\n        try:\n            r = requests.get(placement_endpoint_url + '/',\
+    \ verify=False)\n            if r.status_code == 200 and response_reg.match(r.text):\n\
+    \                LOG.info('Placement service up! - %s', r.text)\n            \
+    \    sys.exit(0)\n                break\n            else:\n                LOG.info('response\
+    \ - %r', r)\n                LOG.info('Placement service not up - %s, %s',\n \
+    \                        r.status_code,\n                         r.text)\n  \
+    \      except Exception:\n            LOG.exception('Error query the placement\
+    \ endpoint:')\n        time.sleep(timeout)\n\n    sys.exit(1)\n\n# vim: set et\
+    \ ts=4 sw=4 :\n"
+  mode: '0755'
+pyshim.sh:
+  content: "#!/usr/bin/bash\n# Copyright 2018 Red Hat Inc.\n#\n# Licensed under the\
+    \ Apache License, Version 2.0 (the \"License\"); you may\n# not use this file\
+    \ except in compliance with the License. You may obtain\n# a copy of the License\
+    \ at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required\
+    \ by applicable law or agreed to in writing, software\n# distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS, WITHOUT\n# WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied. See the\n# License for the specific\
+    \ language governing permissions and limitations\n# under the License.\n#\n# Usage:\
+    \ pyshim.sh <script and/or arguments>\n#\n# Unfortunately THT doesn't know which\
+    \ version of python might be in a\n# container so we need this script to be able\
+    \ to try python3 or python2\n# depending on availability.  Since this is a temporary\
+    \ shim until we've\n# fully cut over to python3, we check for the existence of\
+    \ python3 first\n# before falling back to python2. This will help in the transition\
+    \ from\n# python2 based containers to python3.\n\nshow_usage() {\n    echo \"\
+    Usage: pyshim.sh <script and/or arguments>\"\n}\n\nif [ $# -lt 1 ]\nthen\n   \
+    \ show_usage\n    exit 1\nfi\n\nset -x\nif command -v python3 >/dev/null; then\n\
+    \    python3 \"$@\"\nelif command -v python2 >/dev/null; then\n    python2 \"\
+    $@\"\nelif command -v python >/dev/null; then\n    python \"$@\"\nelse\n    echo\
+    \ \"ERROR: python is not available!\"\n    exit 1\nfi\n"
+  mode: '0755'
+set_swift_keymaster_key_id.sh:
+  content: "#!/bin/bash\nexport OS_PROJECT_DOMAIN_ID=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster project_domain_id)\nexport OS_USER_DOMAIN_ID=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster user_domain_id)\nexport OS_PROJECT_NAME=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster project_name)\nexport OS_USERNAME=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster username)\nexport OS_PASSWORD=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster password)\nexport OS_AUTH_URL=$(crudini --get /etc/swift/keymaster.conf\
+    \ kms_keymaster auth_endpoint)\nexport OS_AUTH_TYPE=password\nexport OS_IDENTITY_API_VERSION=3\n\
+    echo \"retrieve key_id\"\nloop_wait=2\nfor i in {0..5}; do\n  #TODO update uuid\
+    \ from mistral here too\n  secret_href=$(openstack secret list --name swift_root_secret_uuid)\n\
+    \  if [ \"$secret_href\" ]; then\n    echo \"set key_id in keymaster.conf\"\n\
+    \    secret_href=$(openstack secret list --name swift_root_secret_uuid -f value\
+    \ -c \"Secret href\")\n    crudini --set /etc/swift/keymaster.conf kms_keymaster\
+    \ key_id ${secret_href##*/}\n    exit 0\n  else\n    echo \"no key, wait for $loop_wait\
+    \ and check again\"\n    sleep $loop_wait\n    ((loop_wait++))\n  fi\ndone\necho\
+    \ \"Failed to set secret in keymaster.conf, check if Barbican is enabled and responding\
+    \ properly\"\nexit 1\n"
+  mode: '0700'
+wait-port-and-run.sh:
+  content: "#!/usr/bin/bash\nset -eu\n\nHOST=$1\nPORT=$2\n\necho \"$(date -u): Checking\
+    \ whether we can bind to ${HOST}:${PORT}\"\nwhile (ss -Htnl src \"${HOST}\" \"\
+    sport = :${PORT}\" | grep -wq \"${PORT}\"); do\n    echo \"$(date -u): ${HOST}:${PORT}\
+    \ still in use, waiting...\";\n    sleep 10;\ndone\n\nshift 2\nCOMMAND=\"$*\"\n\
+    if [ -z \"${COMMAND}\" ]; then\n    COMMAND=\"true\"\nfi\nexec $COMMAND\n"
+  mode: '0755'

@@ -1,0 +1,21 @@
+
+- hosts: Controller:overcloud
+  strategy: tripleo_free
+  name: Server Post Deployments
+  become: true
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  tasks:
+    - name: Server Post Deployments
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'Server Post Deployments' to resume from this task
+
+    - include_tasks: deployments.yaml
+      vars:
+        force: false
+      with_items: "{{ hostvars[inventory_hostname]['post_deployments_' ~ tripleo_role_name]|default([]) }}"
+  tags:
+    - overcloud
+    - post_deploy_steps

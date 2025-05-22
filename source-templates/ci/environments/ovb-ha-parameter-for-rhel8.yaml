@@ -1,0 +1,2 @@
+parameter_defaults:
+  NovaHWMachineType: x86_64=q35

@@ -1,0 +1,379 @@
+all_nodes_extra_map_data: {}
+cloud_domain: turbo.lab.test
+cloud_names:
+  cloud_name_ctlplane: overcloud.ctlplane.turbo.lab.test
+  cloud_name_internal_api: overcloud.internalapi.turbo.lab.test
+  cloud_name_storage: overcloud.storage.turbo.lab.test
+  cloud_name_storage_mgmt: overcloud.storagemgmt.turbo.lab.test
+container_cli: podman
+control_virtual_ip: 192.168.131.60
+deploy_artifact_files: []
+deploy_artifact_urls: []
+deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+deploy_steps_max: 6
+enable_internal_tls: false
+enabled_networks:
+- InternalApi
+- Storage
+- StorageMgmt
+- Tenant
+enabled_services:
+- keystone_admin_api
+- keystone_public_api
+- boot_params_service
+- ca_certs
+- ceph_client
+- ceph_mgr
+- ceph_mon
+- cinder_api
+- cinder_scheduler
+- cinder_volume
+- clustercheck
+- container_image_prepare
+- glance_api
+- glance_api_internal
+- haproxy
+- heat_api
+- heat_api_cloudwatch_disabled
+- heat_api_cfn
+- heat_engine
+- horizon
+- iscsid
+- kernel
+- keystone
+- memcached
+- mysql
+- mysql_client
+- neutron_api
+- neutron_plugin_ml2_ovn
+- nova_api
+- nova_conductor
+- nova_metadata
+- nova_scheduler
+- nova_vnc_proxy
+- logrotate_crond
+- ovn_dbs
+- ovn_controller
+- pacemaker
+- placement
+- oslo_messaging_rpc
+- oslo_messaging_notify
+- podman
+- snmp
+- sshd
+- swift_proxy
+- swift_ringbuilder
+- swift_storage
+- chrony
+- timezone
+- tripleo_firewall
+- tripleo_packages
+- tuned
+- boot_params_service
+- ca_certs
+- ceph_client
+- ceph_osd
+- iscsid
+- kernel
+- mysql_client
+- nova_compute
+- nova_libvirt
+- nova_libvirt_guests
+- nova_migration_target
+- logrotate_crond
+- podman
+- snmp
+- sshd
+- chrony
+- timezone
+- tripleo_firewall
+- tripleo_packages
+- tuned
+- ovn_controller
+- ovn_metadata
+extra_hosts_entries: []
+hide_sensitive_logs: true
+hosts_entry:
+- 192.168.131.60  overcloud.ctlplane.turbo.lab.test
+- 172.16.2.10  overcloud.internalapi.turbo.lab.test
+- 172.16.4.10  overcloud.storage.turbo.lab.test
+- 172.16.5.11  overcloud.storagemgmt.turbo.lab.test
+- 172.16.2.14 controller-0.turbo.lab.test controller-0
+- 172.16.2.14 controller-0.internalapi.turbo.lab.test controller-0.internalapi
+- 172.16.4.11 controller-0.storage.turbo.lab.test controller-0.storage
+- 172.16.5.10 controller-0.storagemgmt.turbo.lab.test controller-0.storagemgmt
+- 172.16.3.10 controller-0.tenant.turbo.lab.test controller-0.tenant
+- 192.168.131.62 controller-0.ctlplane.turbo.lab.test controller-0.ctlplane
+- 172.16.2.15 controller-1.turbo.lab.test controller-1
+- 172.16.2.15 controller-1.internalapi.turbo.lab.test controller-1.internalapi
+- 172.16.4.12 controller-1.storage.turbo.lab.test controller-1.storage
+- 172.16.5.12 controller-1.storagemgmt.turbo.lab.test controller-1.storagemgmt
+- 172.16.3.11 controller-1.tenant.turbo.lab.test controller-1.tenant
+- 192.168.131.63 controller-1.ctlplane.turbo.lab.test controller-1.ctlplane
+- 172.16.2.16 controller-2.turbo.lab.test controller-2
+- 172.16.2.16 controller-2.internalapi.turbo.lab.test controller-2.internalapi
+- 172.16.4.13 controller-2.storage.turbo.lab.test controller-2.storage
+- 172.16.5.13 controller-2.storagemgmt.turbo.lab.test controller-2.storagemgmt
+- 172.16.3.12 controller-2.tenant.turbo.lab.test controller-2.tenant
+- 192.168.131.64 controller-2.ctlplane.turbo.lab.test controller-2.ctlplane
+- 172.16.2.17 computehci-0.turbo.lab.test computehci-0
+- 172.16.2.17 computehci-0.internalapi.turbo.lab.test computehci-0.internalapi
+- 172.16.4.14 computehci-0.storage.turbo.lab.test computehci-0.storage
+- 172.16.5.14 computehci-0.storagemgmt.turbo.lab.test computehci-0.storagemgmt
+- 172.16.3.13 computehci-0.tenant.turbo.lab.test computehci-0.tenant
+- 192.168.131.65 computehci-0.ctlplane.turbo.lab.test computehci-0.ctlplane
+- 172.16.2.18 computehci-1.turbo.lab.test computehci-1
+- 172.16.2.18 computehci-1.internalapi.turbo.lab.test computehci-1.internalapi
+- 172.16.4.15 computehci-1.storage.turbo.lab.test computehci-1.storage
+- 172.16.5.15 computehci-1.storagemgmt.turbo.lab.test computehci-1.storagemgmt
+- 172.16.3.14 computehci-1.tenant.turbo.lab.test computehci-1.tenant
+- 192.168.131.66 computehci-1.ctlplane.turbo.lab.test computehci-1.ctlplane
+internal_api_net_name: internal_api
+keystone_resources:
+  cinder:
+    users:
+      cinder:
+        password: pfll4lftd7hzsfpmktrrm6x2f
+        roles:
+        - admin
+        - service
+  cinderv3:
+    endpoints:
+      admin: http://172.16.2.10:8776/v3/%(tenant_id)s
+      internal: http://172.16.2.10:8776/v3/%(tenant_id)s
+      public: http://192.168.131.60:8776/v3/%(tenant_id)s
+    region: regionOne
+    service: volumev3
+    users:
+      cinderv3:
+        password: pfll4lftd7hzsfpmktrrm6x2f
+        roles:
+        - admin
+        - service
+  glance:
+    endpoints:
+      admin: http://172.16.2.10:9293
+      internal: http://172.16.2.10:9293
+      public: http://192.168.131.60:9292
+    region: regionOne
+    service: image
+    users:
+      glance:
+        password: 7kh7n7w2z5pb24h7qtgjr42rg
+  heat:
+    domains:
+    - heat_stack
+    endpoints:
+      admin: http://172.16.2.10:8004/v1/%(tenant_id)s
+      internal: http://172.16.2.10:8004/v1/%(tenant_id)s
+      public: http://192.168.131.60:8004/v1/%(tenant_id)s
+    region: regionOne
+    roles:
+    - heat_stack_user
+    service: orchestration
+    users:
+      heat:
+        password: 8dkpzcsfg5h4kt2hf6jjz76kc
+      heat_stack_domain_admin:
+        domain: heat_stack
+        password: 7w88mchdcsdkz5zmxlx9xrmp9
+        roles:
+        - admin
+  heat-cfn:
+    endpoints:
+      admin: http://172.16.2.10:8000/v1
+      internal: http://172.16.2.10:8000/v1
+      public: http://192.168.131.60:8000/v1
+    region: regionOne
+    service: cloudformation
+    users:
+      heat-cfn:
+        password: 8dkpzcsfg5h4kt2hf6jjz76kc
+  neutron:
+    endpoints:
+      admin: http://172.16.2.10:9696
+      internal: http://172.16.2.10:9696
+      public: http://192.168.131.60:9696
+    region: regionOne
+    service: network
+    users:
+      neutron:
+        password: xdpszmqntmkbtxnfkhk8trzkw
+  nova:
+    endpoints:
+      admin: http://172.16.2.10:8774/v2.1
+      internal: http://172.16.2.10:8774/v2.1
+      public: http://192.168.131.60:8774/v2.1
+    region: regionOne
+    service: compute
+    users:
+      nova:
+        password: shxb4mjmzm9mx9fgxmztzjjjg
+        roles:
+        - admin
+        - service
+  placement:
+    endpoints:
+      admin: http://172.16.2.10:8778/placement
+      internal: http://172.16.2.10:8778/placement
+      public: http://192.168.131.60:8778/placement
+    region: regionOne
+    service: placement
+    users:
+      placement:
+        password: tpwgkqjj2cvpw7ttbjldddvpg
+  swift:
+    endpoints:
+      admin: http://172.16.4.10:8080
+      internal: http://172.16.4.10:8080/v1/AUTH_%(tenant_id)s
+      public: http://192.168.131.60:8080/v1/AUTH_%(tenant_id)s
+    region: regionOne
+    roles:
+    - swiftoperator
+    - ResellerAdmin
+    service: object-store
+    users:
+      swift:
+        password: qqc7qd682lvcbn5btmx6vx28w
+net_cidr_map:
+  ctlplane:
+  - 192.168.131.0/25
+  internal_api:
+  - 172.16.2.0/24
+  storage:
+  - 172.16.4.0/24
+  storage_mgmt:
+  - 172.16.5.0/24
+  tenant:
+  - 172.16.3.0/24
+net_vip_map:
+  ctlplane: 192.168.131.60
+  ctlplane_subnet: 192.168.131.60/25
+  ctlplane_uri: 192.168.131.60
+  internal_api: 172.16.2.10
+  internal_api_subnet: ''
+  internal_api_uri: 172.16.2.10
+  storage: 172.16.4.10
+  storage_mgmt: 172.16.5.11
+  storage_mgmt_subnet: ''
+  storage_mgmt_uri: 172.16.5.11
+  storage_subnet: ''
+  storage_uri: 172.16.4.10
+  tenant: ''
+  tenant_subnet: ''
+  tenant_uri: ''
+network_safe_defaults: true
+network_virtual_ips:
+  ctlplane:
+    index: 1
+    ip_address: 192.168.131.60
+  internal_api:
+    index: 2
+    ip_address: 172.16.2.10
+  storage:
+    index: 3
+    ip_address: 172.16.4.10
+  storage_mgmt:
+    index: 4
+    ip_address: 172.16.5.11
+networks:
+  InternalApi:
+    name: internal_api
+    name_lower: internal_api
+  Storage:
+    name: storage
+    name_lower: storage
+  StorageMgmt:
+    name: storage_mgmt
+    name_lower: storage_mgmt
+  Tenant:
+    name: tenant
+    name_lower: tenant
+nova_additional_cell: false
+ping_test_gateway_ips:
+  ComputeHCI:
+  - 192.168.131.1
+  Controller:
+  - 192.168.131.1
+ping_test_ips:
+  ComputeHCI: 192.168.131.65 172.16.2.17 172.16.4.14 172.16.5.14 172.16.3.13
+  Controller: 192.168.131.62 172.16.2.14 172.16.4.11 172.16.5.10 172.16.3.10
+primary_role_name: Controller
+service_net_map:
+  aodh_api_network: internal_api
+  apache_network: internal_api
+  barbican_api_network: internal_api
+  bindnetwork: ctlplane
+  ceph_cluster_network: storage_mgmt
+  ceph_dashboard_network: ctlplane
+  ceph_grafana_network: storage
+  ceph_mon_network: storage
+  ceph_rgw_network: storage
+  cinder_api_network: internal_api
+  cinder_iscsi_network: storage
+  compute_hcihostname_resolve_network: internal_api
+  compute_hcimetrics_qdr_network: internal_api
+  controller_hostname_resolve_network: internal_api
+  controller_metrics_qdr_network: internal_api
+  designate_api_network: internal_api
+  designate_bind_network: ctlplane
+  designate_mdns_network: internal_api
+  designate_worker_network: ctlplane
+  docker_registry_network: ctlplane
+  etcd_network: internal_api
+  ganesha_network: ctlplane
+  glance_api_edge_network: internal_api
+  glance_api_internal_network: internal_api
+  glance_api_network: internal_api
+  gnocchi_api_network: internal_api
+  haproxy_network: ctlplane
+  heat_api_cfn_network: internal_api
+  heat_api_cloudwatch_network: internal_api
+  heat_api_network: internal_api
+  horizon_network: internal_api
+  internal_api_network: internal_api
+  ironic_api_network: ctlplane
+  ironic_inspector_network: ctlplane
+  ironic_network: ctlplane
+  keystone_admin_api_network: ctlplane
+  keystone_public_api_network: internal_api
+  manila_api_network: internal_api
+  memcached_network: internal_api
+  mongodb_network: internal_api
+  mysql_network: internal_api
+  neutron_api_network: internal_api
+  neutron_tenant_network: tenant
+  nova_api_network: internal_api
+  nova_libvirt_network: internal_api
+  nova_metadata_network: internal_api
+  nova_vnc_proxy_network: internal_api
+  novajoin_network: internal_api
+  octavia_api_network: internal_api
+  opendaylight_api_network: internal_api
+  oslo_messaging_notify_network: internal_api
+  oslo_messaging_rpc_network: internal_api
+  ovn_dbs_network: internal_api
+  pacemaker_network: internal_api
+  pacemaker_remote_network: internal_api
+  placement_network: internal_api
+  public_network: ctlplane
+  qdr_network: internal_api
+  rabbitmq_management_network: internal_api
+  rabbitmq_network: internal_api
+  redis_network: internal_api
+  snmpd_network: ctlplane
+  swift_proxy_network: storage
+  swift_storage_network: storage_mgmt
+  unbound_network: ctlplane
+storage_mgmt_net_name: storage_mgmt
+storage_net_name: storage
+tenant_net_name: tenant
+undercloud_hosts_entries: []
+validate_controllers_icmp: true
+validate_fqdn: false
+validate_gateways_icmp: true
+vip_hosts_entries:
+- 192.168.131.60  overcloud.ctlplane.turbo.lab.test
+- 172.16.2.10  overcloud.internalapi.turbo.lab.test
+- 172.16.4.10  overcloud.storage.turbo.lab.test
+- 172.16.5.11  overcloud.storagemgmt.turbo.lab.test

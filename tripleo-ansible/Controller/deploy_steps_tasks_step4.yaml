@@ -1,0 +1,74 @@
+- containers.podman.podman_container_info:
+    name: keystone
+  delay: 30
+  failed_when:
+  - keystone_infos.containers.0.Healthcheck.Status is defined
+  - '''healthy'' not in keystone_infos.containers.0.Healthcheck.Status'
+  name: validate keystone container state
+  register: keystone_infos
+  retries: 10
+  tags:
+  - opendev-validation
+  - opendev-validation-keystone
+  when:
+  - container_cli == 'podman'
+  - not container_healthcheck_disabled
+  - step|int == 4
+- containers.podman.podman_container_info:
+    name: nova_api
+  delay: 30
+  failed_when:
+  - nova_api_infos.containers.0.Healthcheck.Status is defined
+  - '''healthy'' not in nova_api_infos.containers.0.Healthcheck.Status'
+  name: validate nova-api container state
+  register: nova_api_infos
+  retries: 10
+  tags:
+  - opendev-validation
+  - opendev-validation-nova
+  when:
+  - container_cli == 'podman'
+  - not container_healthcheck_disabled
+  - step|int == 4
+- block:
+  - block:
+    - include_role:
+        name: tripleo_container_manage
+      loop:
+      - ovn_cluster_north_db_server
+      - ovn_cluster_south_db_server
+      - ovn_cluster_northd
+      loop_control:
+        loop_var: ovn_container
+      name: Start OVN container
+      vars:
+        tripleo_container_manage_config: /var/lib/tripleo-config/container-startup-config/step_0
+        tripleo_container_manage_config_id: '{{ ovn_container }}'
+        tripleo_container_manage_config_patterns: '{{ ovn_container }}.json'
+  - become: true
+    name: Set connection
+    shell: 'podman exec ovn_cluster_north_db_server bash -c "ovn-nbctl --no-leader-only
+      --inactivity-probe={{ tripleo_ovn_cluster_probe_interval }} set-connection p{{
+      tripleo_ovn_cluster_dbs_protocol }}:{{ tripleo_ovn_cluster_nb_db_port }}:{{
+      tripleo_ovn_cluster_dbs_addr }}"
+
+      podman exec ovn_cluster_south_db_server bash -c "ovn-sbctl --no-leader-only
+      --inactivity-probe={{ tripleo_ovn_cluster_probe_interval }} set-connection p{{
+      tripleo_ovn_cluster_dbs_protocol }}:{{ tripleo_ovn_cluster_sb_db_port }}:{{
+      tripleo_ovn_cluster_dbs_addr }}"
+
+      '
+    vars:
+      tripleo_ovn_cluster_dbs_addr: 0.0.0.0
+      tripleo_ovn_cluster_dbs_protocol: '{{ enable_internal_tls | ternary(''ssl'',
+        ''tcp'', ''tcp'') }}'
+      tripleo_ovn_cluster_nb_db_port: 6641
+      tripleo_ovn_cluster_network: internal_api
+      tripleo_ovn_cluster_probe_interval: 60000
+      tripleo_ovn_cluster_sb_db_port: 6642
+    when:
+    - is_ovn_dbs_bootstrap_node | bool
+  name: Start OVN DBs and northd containers (non-bootstrap nodes)
+  when:
+  - step|int == 4
+  - not is_ovn_dbs_bootstrap_node | bool

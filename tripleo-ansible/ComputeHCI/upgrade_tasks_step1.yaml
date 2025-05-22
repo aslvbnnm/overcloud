@@ -1,0 +1,494 @@
+- become: true
+  delegate_to: '{{ groups[''ceph_mon''][0] }}'
+  name: Set noout flag
+  shell: cephadm shell -c /etc/ceph/{{ tripleo_cephadm_cluster }}.conf -k /etc/ceph/{{
+    tripleo_cephadm_cluster }}.client.admin.keyring -- ceph osd set {{ item }}
+  tags:
+  - never
+  - system_upgrade
+  - system_upgrade_prepare
+  vars:
+    tripleo_cephadm_cluster: ceph
+  when:
+  - step|int == 1
+  - upgrade_leapp_enabled
+  with_items:
+  - noout
+  - norecover
+  - nobackfill
+  - norebalance
+  - nodeep-scrub
+- block:
+  - file:
+      path: /etc/tmpfiles.d/var-run-libvirt.conf
+      state: absent
+    name: Remove old tmpfiles.d config
+  name: nova_libvirt_container_tmpfile_cleanup
+  when: step|int == 1
+- name: Get container virtlogd image
+  set_fact:
+    virtlogd_image: registry.redhat.io/rhosp-rhel9/openstack-nova-libvirt:17.1.6
+  tags: always
+  when: step|int == 1
+- args:
+    executable: /bin/bash
+  failed_when: false
+  name: Diff OS release in contianer image and baremetal
+  register: libvirt_ubi_diff
+  shell: 'diff /etc/redhat-release <(podman run {{ virtlogd_image }} cat /etc/redhat-release)
+
+    '
+  when: step|int == 1
+- fail:
+    msg: 'The host operating system versus container UBI does not match.
+
+      {{ libvirt_ubi_diff.stdout }}
+
+      Most likely contianer passed to NovaLibvirt was EL8 one.
+
+      You have to pass the correct container for container-image-prepare.
+
+      If you would continue all running workloads would get destroyed.
+
+      '
+  name: Fail if UBI of the contianer does not match RHEL of running host
+  when:
+  - '''system_upgrade'' not in ansible_run_tags'
+  - step|int == 1
+  - libvirt_ubi_diff.rc == 1
+- block:
+  - name: Get running image version
+    register: old_virtlogd_image
+    shell: 'podman ps --filter name=^nova_virtlogd$ --format "{% raw %}{{ .Image }}{%
+      endraw %}"
+
+      '
+  - name: Switch running image to new image in wrapper script
+    shell: 'sed -i -e ''s|{{ old_virtlogd_image.stdout }}|{{ virtlogd_image }}|''
+      /var/lib/container-config-scripts/virtlogd_wrapper
+
+      '
+    when: old_virtlogd_image.stdout != virtlogd_image
+  name: Switch virtlogd image before system upgrade
+  tags:
+  - never
+  - system_upgrade
+  when: step|int == 1
+- block:
+  - file:
+      path: /etc/tmpfiles.d/var-run-libvirt.conf
+      state: absent
+    name: Remove old tmpfiles.d config
+  name: nova_migration_target_tmpfile_cleanup
+  when: step|int == 1
+- file:
+    path: /etc/cron.daily/containers-tmpwatch
+    state: absent
+  name: Ensure old cron.daily is absent
+  when: step|int == 1
+- block:
+  - lineinfile:
+      dest: /etc/hosts
+      line: '{{ undercloud_hosts_entries | join('''') }}'
+      state: present
+    name: Make sure the Undercloud hostname is included in /etc/hosts
+    when:
+    - undercloud_hosts_entries is defined
+  name: Configure Podman registry
+  when:
+  - step|int == 1
+- block:
+  - name: Set login facts
+    no_log: true
+    set_fact:
+      container_default_pids_limit: 4096
+      container_events_logger_mechanism: journald
+      container_registry_insecure_registries: []
+      container_registry_login: false
+      container_registry_logins: {}
+      container_registry_logins_json:
+        registry.redhat.io:
+          grosenbe-redhat.com: i.am.king.bison.6591
+  - name: Convert logins json to dict
+    no_log: true
+    set_fact:
+      container_registry_logins: '{{ container_registry_logins_json | from_json }}'
+    when:
+    - container_registry_logins_json is string
+    - container_registry_login | bool
+    - (container_registry_logins_json | length) > 0
+  - name: Set registry logins
+    no_log: true
+    set_fact:
+      container_registry_logins: '{{ container_registry_logins_json }}'
+    when:
+    - container_registry_logins_json is mapping
+    - container_registry_login | bool
+    - (container_registry_logins_json | length) > 0
+  - include_role:
+      name: tripleo_podman
+      tasks_from: tripleo_podman_install.yml
+    name: Run podman install
+    vars:
+      tripleo_container_default_pids_limit: '{{ container_default_pids_limit }}'
+      tripleo_container_events_logger_mechanism: '{{ container_events_logger_mechanism
+        }}'
+      tripleo_container_registry_insecure_registries: '{{ container_registry_insecure_registries
+        }}'
+  - include_role:
+      name: tripleo_podman
+      tasks_from: tripleo_podman_login.yml
+    name: Run podman login
+    vars:
+      tripleo_container_registry_login: '{{ container_registry_login | bool }}'
+      tripleo_container_registry_logins: '{{ container_registry_logins }}'
+  name: Run podman install
+  tags:
+  - system_upgrade
+  - system_upgrade_run
+  when:
+  - step|int == 1
+- lineinfile:
+    backrefs: true
+    dest: /usr/share/containers/containers.conf
+    line: '#\1'
+    regexp: (?i)^(infra_image.*)
+    state: present
+  name: Comment infra_image in container.conf
+  when:
+  - step|int == 1
+- name: Stop snmp service
+  service: name=snmpd state=stopped
+  when:
+  - step|int == 1
+  - snmpd_enabled|bool
+- block:
+  - failed_when: false
+    name: Disable tripleo-iptables.service
+    register: systemd_tripleo_iptables
+    systemd:
+      enabled: false
+      name: tripleo-iptables.service
+      state: stopped
+  - file:
+      path: /etc/systemd/system/tripleo-iptables.service
+      state: absent
+    name: Cleanup tripleo-iptables.services
+  - failed_when: false
+    name: Disable tripleo-ip6tables.service
+    register: systemd_tripleo_ip6tables
+    systemd:
+      enabled: false
+      name: tripleo-ip6tables.service
+      state: stopped
+  - file:
+      path: /etc/systemd/system/tripleo-ip6tables.service
+      state: absent
+    name: Cleanup tripleo-ip6tables.services
+  - name: Reload systemd
+    systemd:
+      daemon_reload: true
+    when:
+    - (systemd_tripleo_iptables is changed or systemd_tripleo_ip6tables is changed)
+  name: Cleanup tripleo-iptables services
+  when:
+  - (step | int) == 1
+- name: Gather missing facts
+  setup:
+    gather_subset:
+    - '!all'
+    - '!min'
+    - distribution
+  tags:
+  - always
+- name: Set leapp facts
+  set_fact:
+    upgrade_leapp_command_options: ''
+    upgrade_leapp_debug: false
+    upgrade_leapp_devel_skip: ''
+    upgrade_leapp_enabled: "{{ _upgradeLeappEnabled | bool and\n   ansible_facts['distribution']\
+      \ == 'RedHat' and\n   ansible_facts['distribution_major_version'] is version('8',\
+      \ '==') }}"
+    upgrade_leapp_post_reboot_delay: 120
+    upgrade_leapp_reboot_timeout: 3600
+  tags:
+  - always
+  vars:
+    _upgradeLeappEnabled: false
+- block:
+  - block:
+    - name: Run UpgradeInitCommand
+      shell: '#!/bin/bash
+
+
+        if [[ -f /etc/resolv.conf.save ]] ; then rm /etc/resolv.conf.save; fi
+
+
+        '
+    - name: Run UpgradeInitCommonCommand
+      shell: '#!/bin/bash
+
+
+        '
+    - dnf:
+        name: '@{{ item.module }}:{{ item.stream }}/{{ item.profile|default(''common'')
+          }}'
+        state: present
+      loop: '{{ dnf_module_list|list }}'
+      name: Ensure DNF modules have the right stream
+      vars:
+        dnf_module_list: []
+      when:
+      - dnf_module_list|length > 0
+      - item.distribution_version is defined
+      - ansible_facts['distribution_major_version'] is version(item.distribution_version,
+        '==')
+    - name: Ensure TripleO prerequisite packages are installed
+      package:
+        name:
+        - jq
+        - lvm2
+        - openstack-selinux
+        - os-net-config
+        - puppet-tripleo
+        - python3-heat-agent*
+        - rsync
+        state: present
+      when: ansible_facts['distribution_major_version'] is version('8', '==')
+    - name: Ensure TripleO prerequisite packages are installed and use role based
+        heat variable to provide specific list of packages
+      package:
+        name: '{{ base_tripleo_packages }}'
+        state: present
+      vars:
+        base_tripleo_packages: []
+      when:
+      - ansible_facts['distribution_major_version'] is version('8', '==')
+      - base_tripleo_packages|length > 0
+    - name: WA for 2240185 - If the image is schema 1 and lacks signatures than add
+        empty signatures
+      shell: "for manifest_file in `find /var/lib/containers/storage/overlay-images/\
+        \ -name 'manifest'`\ndo\n    cat <<< $( jq  'if .schemaVersion == 1 then if\
+        \ has(\"signatures\") then . else .signatures=[] end else . end' $manifest_file\
+        \ ) > $manifest_file\ndone\n"
+      when: ansible_facts['distribution_major_version'] is version('8', '==')
+    name: Package and repo update tasks
+    when: step|int == 0
+  - check_mode: false
+    command: /usr/bin/rpm -q libvirt-daemon
+    failed_when: false
+    name: check if libvirt is installed
+    register: libvirt_installed
+    when: step|int == 0
+  - loop:
+    - libvirtd.service
+    - virtlogd.socket
+    name: make sure libvirt services are disabled and masked
+    service:
+      daemon_reload: true
+      enabled: false
+      masked: true
+      name: '{{ item }}'
+      state: stopped
+    when:
+    - step|int == 0
+    - libvirt_installed.rc == 0
+  - name: Special treatment for OpenvSwitch
+    register: ovs_upgrade
+    tripleo_ovs_upgrade: null
+    when:
+    - step|int == 2
+  - name: Always ensure the openvswitch service is enabled and running after upgrades
+    service:
+      enabled: true
+      name: openvswitch
+      state: started
+    when:
+    - step|int == 2
+    - ovs_upgrade.changed|bool
+  - name: Check for os-net-config upgrade
+    register: os_net_config_need_upgrade
+    shell: yum check-upgrade | awk '/os-net-config/{print}'
+    when: step|int == 3
+  - name: Check that os-net-config has configuration
+    register: stat_config_json
+    stat:
+      get_attributes: false
+      get_checksum: false
+      get_mime: false
+      path: /etc/os-net-config/config.json
+    when: step|int == 3
+  - block:
+    - name: Upgrade os-net-config
+      package: name=os-net-config state=latest
+    - changed_when: os_net_config_upgrade.rc == 2
+      command: os-net-config --no-activate -c /etc/os-net-config/config.json -v --detailed-exit-codes
+      failed_when: os_net_config_upgrade.rc not in [0,2]
+      name: take new os-net-config parameters into account now
+      register: os_net_config_upgrade
+    when:
+    - step|int == 3
+    - os_net_config_need_upgrade.stdout
+    - stat_config_json.stat.exists
+  - name: Update all packages
+    vars:
+      skip_package_update: false
+    when:
+    - step|int == 3
+    - not skip_package_update|bool
+    yum:
+      exclude: ansible-core
+      name: '*'
+      state: latest
+  name: Host packages setup
+  tags: setup_packages
+- name: set first_controller fact
+  set_fact:
+    first_controller: '{{ groups[''ovn_controller'']|first|lower == ansible_facts[''hostname'']|lower
+      }}'
+- block:
+  - async: 600
+    become: true
+    containers.podman.podman_image:
+      force: true
+      name: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+      validate_certs: false
+    delegate_to: '{{ item }}'
+    loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+      }}'
+    name: Force pull image in case image name doesn't change.
+    poll: 0
+    register: ovn_controller_image_update
+    tags:
+    - ovn
+    - ovn_image
+    when: step|int == 1
+  - async_status:
+      jid: '{{ async_result_item.ansible_job_id }}'
+    become: true
+    delay: 1
+    delegate_to: '{{ async_result_item.item }}'
+    loop: '{{ovn_controller_image_update.results }}'
+    loop_control:
+      loop_var: async_result_item
+    name: Was the ovn_controller image pull successful.
+    register: async_poll_results
+    retries: 600
+    tags:
+    - ovn
+    - ovn_image
+    until: async_poll_results.finished
+    when:
+    - step|int == 1
+    - '''results'' in ovn_controller_image_update'
+  - debug:
+      msg: ovn container will be using {{ image }}
+    name: OVN Container image used
+    tags: ovn
+    vars:
+      image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+    when: step|int == 1
+  - async: 600
+    become: true
+    delegate_to: '{{ item }}'
+    loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+      }}'
+    name: Update OVN OVS related parameters before update.
+    poll: 0
+    register: ovs_vsctl
+    shell: 'set -e
+
+      ovs-vsctl set Open_vSwitch . external_ids:ovn-ofctrl-wait-before-clear={{ timeout
+      }}
+
+      ovs-vsctl set Open_vSwitch . external_ids:ovn-monitor-all=true
+
+      ovs-vsctl set Open_vSwitch . external_ids:ovn-match-northd-version=false
+
+      '
+    tags:
+    - ovn
+    vars:
+      timeout: 8000
+    when:
+    - step|int == 1
+  - async_status:
+      jid: '{{ async_result_item.ansible_job_id }}'
+    become: true
+    delay: 1
+    delegate_to: '{{ async_result_item.item }}'
+    loop: '{{ovs_vsctl.results }}'
+    loop_control:
+      loop_var: async_result_item
+    name: Was the update of OVN OVS related parameter successful.
+    register: async_poll_results
+    retries: 600
+    tags:
+    - ovn
+    until: async_poll_results.finished
+    when:
+    - step|int == 1
+    - '''results'' in ovs_vsctl'
+  - set_fact:
+      any_ovn_host: '{{groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+        | first }}'
+    tags: ovn
+    when: step|int == 1
+  - become: true
+    delegate_to: '{{ any_ovn_host }}'
+    find:
+      paths: /var/lib/tripleo-config/container-startup-config/
+      patterns: '*ovn_controller.json'
+      recurse: true
+    name: Find ovn_controller configs in container-startup-configs
+    register: ovn_cont_17_0
+    tags:
+    - ovn
+    when: (step|int == 1) and (any_ovn_host is defined) and (any_ovn_host|length >
+      0)
+  - name: get directory path from the ovn_cont_17_0
+    set_fact:
+      ovn_config_path: '{{ ovn_cont_17_0.files.0.path | dirname }}'
+    tags: ovn
+    when: step|int == 1
+  - async: 600
+    become: true
+    delegate_to: '{{ item }}'
+    loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+      }}'
+    name: Update ovn_controller.
+    poll: 0
+    register: ovn_controller_update
+    tags: ovn
+    tripleo_container_manage:
+      config_dir: '{{ ovn_config_path }}'
+      config_id:
+      - tripleo_step{{config_step}}
+      config_overrides:
+        .*ovn_controller:
+          image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+          name: ovn_controller
+      config_patterns: '*ovn_controller.json'
+      debug: '{{ enable_debug | bool }}'
+      log_base_path: '{{ container_log_stdout_path }}'
+    vars:
+      config_step: '{{ (''step_4'' in ovn_config_path) | ternary(''4'', ''3'')}}'
+    when: step|int == 1
+  - async_status:
+      jid: '{{ async_result_item.ansible_job_id }}'
+    become: true
+    delay: 1
+    delegate_to: '{{ async_result_item.item }}'
+    loop: '{{ovn_controller_update.results }}'
+    loop_control:
+      loop_var: async_result_item
+    name: Was the ovn_controller successful.
+    register: async_poll_results
+    retries: 600
+    tags: ovn
+    until: async_poll_results.finished
+    when:
+    - step|int == 1
+    - '''results'' in ovn_controller_update'
+  name: Trigger external_update OVN block on first controller
+  when: first_controller | bool

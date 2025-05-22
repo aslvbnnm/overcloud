@@ -1,0 +1,13 @@
+memcached_authtoken_port: 11211
+memcached_port: 11211
+oslo_messaging_notify_password: 2kkcn8z2vpffrsvrknzkz9qnx
+oslo_messaging_notify_port: 5672
+oslo_messaging_notify_scheme: rabbit
+oslo_messaging_notify_use_ssl: 'False'
+oslo_messaging_notify_user_name: guest
+oslo_messaging_rpc_password: 2kkcn8z2vpffrsvrknzkz9qnx
+oslo_messaging_rpc_port: 5672
+oslo_messaging_rpc_scheme: rabbit
+oslo_messaging_rpc_use_ssl: 'False'
+oslo_messaging_rpc_user_name: guest
+ovn_db_clustered: true

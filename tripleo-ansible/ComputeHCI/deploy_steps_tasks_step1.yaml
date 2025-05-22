@@ -1,0 +1,123 @@
+- include_role:
+    name: tripleo_lvmfilter
+  name: Run lvmfilter role
+  when:
+  - step|int == 1
+- include_role:
+    name: tripleo_nvdimm
+  name: manage PMEM namespaces for vPMEM
+  vars:
+    tripleo_nvdimm_pmem_namespaces: ''
+  when:
+  - step|int == 1
+  - tripleo_nvdimm_pmem_namespaces != ''
+- block:
+  - name: Enable post-copy by setting unprivileged_userfaultfd
+    sysctl:
+      name: vm.unprivileged_userfaultfd
+      reload: true
+      state: present
+      sysctl_file: /etc/sysctl.d/99-tripleo-postcopy.conf
+      sysctl_set: true
+      value: 1
+  name: manage OS version 9 specific sysctls
+  when:
+  - step|int == 1
+  - ansible_facts['os_family'] == 'RedHat'
+  - ansible_facts['distribution_major_version'] is version('9', '==')
+- block:
+  - name: is KSM enabled
+    set_fact:
+      compute_ksm_enabled: false
+  - block:
+    - become: true
+      failed_when: false
+      name: Check for ksm
+      register: ksm_service_check
+      shell: systemctl is-active ksm.service || systemctl is-enabled ksm.service
+    - name: disable KSM services
+      register: ksmdisabled
+      service:
+        enabled: false
+        name: '{{ item }}'
+        state: stopped
+      when:
+      - ksm_service_check.rc is defined
+      - ksm_service_check.rc == 0
+      with_items:
+      - ksm.service
+      - ksmtuned.service
+    - command: echo 2 >/sys/kernel/mm/ksm/run
+      name: delete PageKSM after disable ksm on compute
+      when:
+      - ksm_service_check.rc is defined
+      - ksm_service_check.rc == 0
+      - ksmdisabled is changed
+    name: disable KSM on compute
+    when: not compute_ksm_enabled|bool
+  - block:
+    - name: make sure package providing ksmtuned is installed (RHEL8 or CentOS8)
+      package:
+        name: qemu-kvm-common
+        state: present
+      when:
+      - ansible_facts['distribution_major_version'] is version('8', '==')
+    - name: enable ksmtunded
+      service:
+        enabled: true
+        name: '{{ item }}'
+        state: started
+      with_items:
+      - ksm.service
+      - ksmtuned.service
+    name: enable KSM on compute
+    when: compute_ksm_enabled|bool
+  name: enable/disable ksm
+  when:
+  - step|int == 1
+- block:
+  - become: true
+    containers.podman.podman_image:
+      force: true
+      name: '{{ prefetch_image }}'
+      validate_certs: false
+    delay: 5
+    loop: '{{ lookup(''template'', tripleo_role_name + ''/docker_config.yaml'', errors=''ignore'')
+      | default(''{}'', True) | from_yaml | recursive_get_key_from_dict(key=''image'')
+      | unique }}'
+    loop_control:
+      loop_var: prefetch_image
+    name: Pre-fetch all the containers
+    register: result
+    retries: 5
+    until: result is succeeded
+  when:
+  - (step|int) == 1
+- block:
+  - include_role:
+      name: linux-system-roles.certificate
+    vars:
+      certificate_requests:
+      - ca: ipa
+        dns: '{{fqdn_internal_api}}'
+        key_size: '2048'
+        name: ovn_controller
+        principal: ovn_controller/{{fqdn_internal_api}}@{{idm_realm}}
+  name: Certificate generation
+  when:
+  - step|int == 1
+  - enable_internal_tls
+- block:
+  - include_role:
+      name: linux-system-roles.certificate
+    vars:
+      certificate_requests:
+      - ca: ipa
+        dns: '{{fqdn_internal_api}}'
+        key_size: '2048'
+        name: ovn_metadata
+        principal: ovn_metadata/{{fqdn_internal_api}}@{{idm_realm}}
+  name: Certificate generation
+  when:
+  - step|int == 1
+  - enable_internal_tls

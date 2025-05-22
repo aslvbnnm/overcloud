@@ -1,0 +1,46 @@
+# This file allows IPv6 deployment on tenant networks as well.
+# This should only be used for new deployments and not for upgrade
+# or update.
+resource_registry:
+  # Network Interface templates to use (these files must exist). You can
+  # override these by including one of the net-*.yaml environment files,
+  # such as net-bond-with-vlans-v6.yaml, or modifying the list here.
+  # Port assignments for the Controller
+  OS::TripleO::Controller::Net::SoftwareConfig: OS::Heat::None
+  # Port assignments for the ComputeHCI
+  OS::TripleO::ComputeHCI::Net::SoftwareConfig: OS::Heat::None
+
+parameter_defaults:
+  # This section is where deployment-specific configuration is done
+  #
+  ControllerNetworkConfigTemplate: 'templates/single_nic_vlans/single_nic_vlans.j2'
+  ComputeHCINetworkConfigTemplate: 'templates/single_nic_vlans/single_nic_vlans.j2'
+
+
+  # Customize the IP subnets to match the local environment
+  InternalApiNetCidr: ''
+  # Customize the IP range to use for static IPs and VIPs
+  InternalApiAllocationPools: 
+
+  # Customize the IP subnets to match the local environment
+  StorageNetCidr: ''
+  # Customize the IP range to use for static IPs and VIPs
+  StorageAllocationPools: 
+
+  # Customize the IP subnets to match the local environment
+  StorageMgmtNetCidr: ''
+  # Customize the IP range to use for static IPs and VIPs
+  StorageMgmtAllocationPools: 
+
+  # Customize the IP subnets to match the local environment
+  TenantNetCidr: ''
+  # Customize the IP range to use for static IPs and VIPs
+  TenantAllocationPools: 
+
+  # List of Neutron network types for tenant networks (will be used in order)
+  NeutronNetworkType: 'geneve,vlan'
+  # Neutron VLAN ranges per network, for example 'datacentre:1:499,tenant:500:1000':
+  NeutronNetworkVLANRanges: 'datacentre:1:1000'
+  # Customize bonding options, e.g. "mode=4 lacp_rate=1 updelay=1000 miimon=100"
+  # for Linux bonds w/LACP, or "bond_mode=active-backup" for OVS active/backup.
+  BondInterfaceOvsOptions: "bond_mode=active-backup"

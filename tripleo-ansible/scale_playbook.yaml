@@ -1,0 +1,55 @@
+# Collect the facts from the overcloud nodes but ignore unreachable
+# nodes in the case of a dead node which needs to be part of the
+# scale-down operation.
+- import_playbook: common_deploy_steps_playbooks.yaml
+  vars:
+    deploy_source_host: "Undercloud"
+    deploy_target_host: "overcloud"
+
+- hosts: overcloud
+  name: Scaling
+  # NOTE(cloudnull): This is set to true explicitly so that we have up-to-date facts
+  #                  on all overcloud when performing a scaling operation.
+  #                  Without up-to-date facts, we're creating a potential failure
+  #                  scenario.
+  gather_facts: true
+  ignore_unreachable: true
+  become: false
+  vars:
+    bootstrap_server_id: 57536d10-1faf-4377-a332-3f9d87d9e400
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    # Only run the scale tasks on the nodes that are alive.
+    # We expect the tasks to work on the nodes that are alive.
+    # If a task is allowed to fail, it needs to be configured at
+    # the task definition level but not here.
+    - include_tasks: scale_steps_tasks.yaml
+      with_sequence: start=1 end=1
+      loop_control:
+        loop_var: step
+      tags: always
+      # we use ansible_facts['hostname'] to determine if the host is alive
+      # or not.
+      when: ansible_facts['hostname'] is defined
+    # We don't want to run the scale tasks on dead nodes, to allow
+    # the operator to scale down the cloud no matter the state of
+    # the servers.
+    # However, we notify the operator if the node wasn't reachable.
+    # Using fail and not debug module to make it more visible
+    # in the logs.
+    - fail:
+        msg: "Node is unreachable. No scale tasks will be run."
+      ignore_errors: True
+      tags: always
+      # we use ansible_facts['hostname'] to determine if the host is alive
+      # or not.
+      when: ansible_facts['hostname'] is not defined
+  tags:
+    - scale

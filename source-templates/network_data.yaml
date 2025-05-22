@@ -1,0 +1,41 @@
+
+- name: InternalApi
+  name_lower: internal_api
+  vip: true
+  mtu: 1400
+  ipv6: false
+  subnets:
+    internal_api_subnet:
+      vlan: 3802
+      ip_subnet: '172.16.2.0/24'
+      allocation_pools: [{'start': '172.16.2.10', 'end': '172.16.2.50'}]
+- name: Storage
+  name_lower: storage
+  vip: true
+  mtu: 1400
+  ipv6: false
+  subnets:
+    storage_subnet:
+      vlan: 3804
+      ip_subnet: '172.16.4.0/24'
+      allocation_pools: [{'start': '172.16.4.10', 'end': '172.16.4.50'}]
+- name: StorageMgmt
+  name_lower: storage_mgmt
+  vip: true
+  mtu: 1400
+  ipv6: false
+  subnets:
+    storage_mgmt_subnet:
+      vlan: 3805
+      ip_subnet: '172.16.5.0/24'
+      allocation_pools: [{'start': '172.16.5.10', 'end': '172.16.5.50'}]
+- name: Tenant
+  name_lower: tenant
+  vip: false
+  mtu: 1400
+  ipv6: false
+  subnets:
+    tenant_subnet:
+      vlan: 3803
+      ip_subnet: '172.16.3.0/24'
+      allocation_pools: [{'start': '172.16.3.10', 'end': '172.16.3.50'}]

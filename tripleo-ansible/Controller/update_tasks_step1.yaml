@@ -1,0 +1,225 @@
+- block:
+  - become: true
+    name: Get cinder_volume image from pacemaker
+    register: xmllint_pcmk_cinder_volume_image
+    shell: xmllint --xpath "string(//bundle[@id='openstack-cinder-volume']/podman/@image)"
+      /var/lib/pacemaker/cib/cib.xml
+  - name: Get container cinder_volume image
+    set_fact:
+      cinder_volume_image: registry.redhat.io/rhosp-rhel9/openstack-cinder-volume:17.1.6
+      cinder_volume_image_latest: cluster.common.tag/cinder-volume:pcmklatest
+      pcmk_cinder_volume_image: '{{xmllint_pcmk_cinder_volume_image.stdout}}'
+  when: step|int in [0,2]
+- block:
+  - include_role:
+      name: tripleo_container_rm
+    name: Remove non-HA cinder_volume container
+    vars:
+      tripleo_container_cli: '{{ container_cli }}'
+      tripleo_containers_to_rm:
+      - cinder_volume
+  name: Tear-down non-HA cinder_volume container
+  when:
+  - step|int == 1
+- block:
+  - become: true
+    name: Get haproxy image from pacemaker
+    register: xmllint_pcmk_haproxy_image
+    shell: xmllint --xpath "string(//bundle[@id='haproxy-bundle']/podman/@image)"
+      /var/lib/pacemaker/cib/cib.xml
+  - name: Get container haproxy image
+    set_fact:
+      haproxy_image: registry.redhat.io/rhosp-rhel9/openstack-haproxy:17.1.6
+      haproxy_image_latest: cluster.common.tag/haproxy:pcmklatest
+      pcmk_haproxy_image: '{{xmllint_pcmk_haproxy_image.stdout}}'
+  when: step|int in [0,2]
+- block:
+  - include_role:
+      name: tripleo_container_rm
+    name: Remove non-HA haproxy container
+    vars:
+      tripleo_container_cli: '{{ container_cli }}'
+      tripleo_containers_to_rm:
+      - haproxy
+  name: Tear-down non-HA haproxy container
+  when:
+  - step|int == 1
+- block:
+  - name: set is_haproxy_bootstrap_node fact
+    set_fact: is_haproxy_bootstrap_node={{haproxy_short_bootstrap_node_name|lower
+      == ansible_facts['hostname']|lower}}
+    tags: common
+    when:
+    - haproxy_short_bootstrap_node_name|default(false)
+  name: Set HAProxy upgrade facts
+- block:
+  - command: cibadmin --query --xpath "//storage-mapping[@id='haproxy-cert']"
+    failed_when: false
+    name: Check haproxy public certificate configuration in pacemaker
+    register: haproxy_cert_mounted
+  - name: Disable the haproxy cluster resource
+    pacemaker_resource:
+      resource: haproxy-bundle
+      state: disable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+    when: haproxy_cert_mounted.rc == 6
+  - name: Set HAProxy public cert volume mount fact
+    set_fact:
+      haproxy_public_cert_path: /etc/pki/tls/private/overcloud_endpoint.pem
+      haproxy_public_tls_enabled: false
+  - command: pcs resource bundle update haproxy-bundle storage-map add id=haproxy-cert
+      source-dir={{ haproxy_public_cert_path }} target-dir=/var/lib/kolla/config_files/src-tls/{{
+      haproxy_public_cert_path }} options=ro
+    name: Add a bind mount for public certificate in the haproxy bundle
+    when: haproxy_cert_mounted.rc == 6 and haproxy_public_tls_enabled|bool
+  - name: Enable the haproxy cluster resource
+    pacemaker_resource:
+      resource: haproxy-bundle
+      state: enable
+      wait_for_resource: true
+    register: output
+    retries: 5
+    until: output.rc == 0
+    when: haproxy_cert_mounted.rc == 6
+  name: Mount TLS cert if needed
+  when:
+  - step|int == 1
+  - is_haproxy_bootstrap_node
+- block:
+  - become: true
+    name: Get galera image from pacemaker
+    register: xmllint_pcmk_galera_image
+    shell: xmllint --xpath "string(//bundle[@id='galera-bundle']/podman/@image)" /var/lib/pacemaker/cib/cib.xml
+  - name: Get container galera image
+    set_fact:
+      galera_image: registry.redhat.io/rhosp-rhel9/openstack-mariadb:17.1.6
+      galera_image_latest: cluster.common.tag/mariadb:pcmklatest
+      pcmk_galera_image: '{{xmllint_pcmk_galera_image.stdout}}'
+  when: step|int in [0,2]
+- block:
+  - changed_when: false
+    command: podman container exists mysql
+    failed_when: false
+    name: stat mysql container
+    register: stat_mysql_container
+  - changed_when: true
+    command:
+      argv: '{{ mysql_exec_data | container_exec_cmd }}'
+    name: Create clustercheck user and permissions
+    vars:
+      mysql_exec_data:
+        command:
+        - mysql
+        - /bin/sh
+        - -c
+        - mysql -e "CREATE USER IF NOT EXISTS 'clustercheck'@'localhost' IDENTIFIED
+          BY '${CLUSTERCHECK_PASSWORD}'; GRANT PROCESS ON *.* TO 'clustercheck'@'localhost'
+          WITH GRANT OPTION;"
+        environment:
+          CLUSTERCHECK_PASSWORD: k2d7v5mxx4pff2rpm2hbsvf9g
+    when:
+    - stat_mysql_container.rc == 0
+  - include_role:
+      name: tripleo_container_rm
+    name: Remove non-HA mysql container
+    vars:
+      tripleo_container_cli: '{{ container_cli }}'
+      tripleo_containers_to_rm:
+      - mysql
+  name: Tear-down non-HA mysql container
+  when:
+  - step|int == 1
+- file:
+    path: /etc/cron.daily/containers-tmpwatch
+    state: absent
+  name: Ensure old cron.daily is absent
+  when: step|int == 1
+- name: Move virtual IPs to another node before stopping pacemaker
+  shell: "CLUSTER_NODE=$(crm_node -n)\necho \"Retrieving all the VIPs which are hosted\
+    \ on this node\"\nVIPS_TO_MOVE=$(crm_mon --as-xml | xmllint --xpath '//resource[@resource_agent\
+    \ = \"ocf::heartbeat:IPaddr2\" and @role = \"Started\" and @managed = \"true\"\
+    \ and ./node[@name = \"'${CLUSTER_NODE}'\"]]/@id' - | sed -e 's/id=//g' -e 's/\"\
+    //g')\nfor v in ${VIPS_TO_MOVE}; do\n    echo \"Moving VIP $v on another node\"\
+    \n    pcs resource ban $v ${CLUSTER_NODE} --wait=300\ndone\necho \"Removing the\
+    \ location constraints that were created to move the VIPs\"\nfor v in ${VIPS_TO_MOVE};\
+    \ do\n    echo \"Removing location ban for VIP $v\"\n    ban_id=$(cibadmin --query\
+    \ | xmllint --xpath 'string(//rsc_location[@rsc=\"'${v}'\" and @node=\"'${CLUSTER_NODE}'\"\
+    \ and @score=\"-INFINITY\"]/@id)' -)\n    if [ -n \"$ban_id\" ]; then\n      \
+    \  pcs constraint remove ${ban_id}\n    else\n        echo \"Could not retrieve\
+    \ and clear location constraint for VIP $v\" 2>&1\n    fi\ndone\n"
+  when:
+  - step|int == 1
+  - hostvars[inventory_hostname]["haproxy_node_names"]|default([])|length > 1
+- command: systemd-cat -t ha-shutdown /var/lib/container-config-scripts/pacemaker_mutex_shutdown.sh
+    --acquire
+  name: Acquire the cluster shutdown lock to stop pacemaker cluster
+  when: step|int == 1
+- name: Stop pacemaker cluster
+  pacemaker_cluster: state=offline
+  when: step|int == 1
+- block:
+  - become: true
+    name: Get rabbitmq image from pacemaker
+    register: xmllint_pcmk_rabbitmq_image
+    shell: xmllint --xpath "string(//bundle[@id='rabbitmq-bundle']/podman/@image)"
+      /var/lib/pacemaker/cib/cib.xml
+  - name: Get container rabbitmq image
+    set_fact:
+      pcmk_rabbitmq_image: '{{xmllint_pcmk_rabbitmq_image.stdout}}'
+      rabbitmq_image: registry.redhat.io/rhosp-rhel9/openstack-rabbitmq:17.1.6
+      rabbitmq_image_latest: cluster.common.tag/rabbitmq:pcmklatest
+  when: step|int in [0,2]
+- block:
+  - include_role:
+      name: tripleo_container_rm
+    name: Remove non-HA rabbitmq container
+    vars:
+      tripleo_container_cli: '{{ container_cli }}'
+      tripleo_containers_to_rm:
+      - rabbitmq
+  name: Tear-down non-HA rabbitmq container
+  when:
+  - step|int == 1
+- name: Check swift containers log folder/symlink exists
+  register: swift_log_link
+  stat:
+    path: /var/log/containers/swift
+- file:
+    path: /var/log/containers/swift
+    state: absent
+  name: Delete if symlink
+  when: swift_log_link.stat.islnk is defined and swift_log_link.stat.islnk
+- block:
+  - failed_when: false
+    name: Disable tripleo-iptables.service
+    register: systemd_tripleo_iptables
+    systemd:
+      enabled: false
+      name: tripleo-iptables.service
+      state: stopped
+  - file:
+      path: /etc/systemd/system/tripleo-iptables.service
+      state: absent
+    name: Cleanup tripleo-iptables.services
+  - failed_when: false
+    name: Disable tripleo-ip6tables.service
+    register: systemd_tripleo_ip6tables
+    systemd:
+      enabled: false
+      name: tripleo-ip6tables.service
+      state: stopped
+  - file:
+      path: /etc/systemd/system/tripleo-ip6tables.service
+      state: absent
+    name: Cleanup tripleo-ip6tables.services
+  - name: Reload systemd
+    systemd:
+      daemon_reload: true
+    when:
+    - (systemd_tripleo_iptables is changed or systemd_tripleo_ip6tables is changed)
+  name: Cleanup tripleo-iptables services
+  when:
+  - (step | int) == 1

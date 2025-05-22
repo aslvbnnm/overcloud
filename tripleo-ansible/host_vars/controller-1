@@ -1,0 +1,15 @@
+pre_network_Controller:  [] 
+
+pre_deployments_Controller:  [] 
+
+post_deployments_Controller:  [] 
+
+# ansible_host_vars managed by TripleO Heat Templates in puppet/role.role.j2.yaml:
+fqdn_canonical: controller-1.turbo.lab.test
+fqdn_ctlplane: controller-1.ctlplane.turbo.lab.test
+fqdn_internal_api: controller-1.internalapi.turbo.lab.test
+fqdn_storage: controller-1.storage.turbo.lab.test
+fqdn_storage_mgmt: controller-1.storagemgmt.turbo.lab.test
+fqdn_tenant: controller-1.tenant.turbo.lab.test
+hostname_resolve_network: internal_api
+
