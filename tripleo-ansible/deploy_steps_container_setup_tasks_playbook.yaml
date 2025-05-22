@@ -1,0 +1,32 @@
+- hosts: Controller:overcloud
+  strategy: tripleo_free
+  name: Overcloud container setup tasks
+  become: true
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  vars:
+    bootstrap_server_id: 2c50483f-0cb6-4c45-95ce-59c5e573d3d0
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - name: Overcloud container setup tasks
+      block:
+        - name: Overcloud container setup tasks
+          delegate_to: localhost
+          run_once: true
+          debug:
+            msg: Use --start-at-task 'Overcloud container setup tasks' to resume from this task
+        - name: Write config data
+          include_tasks: common_container_setup_tasks.yaml
+          when:
+            - (deploy_identifier is defined and deploy_identifier != "" and deploy_identifier is not none)
+  tags:
+    - overcloud
+    - container_setup_tasks

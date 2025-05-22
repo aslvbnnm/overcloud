@@ -1,0 +1,344 @@
+- block:
+  - become: true
+    command: '{{ container_cli }} exec cinder_api cinder-manage db online_data_migrations'
+    delegate_to: '{{ (groups[''cinder_api''] | difference(groups[''excluded_overcloud'']))[0]
+      }}'
+    name: Online data migration for Cinder
+    tags:
+    - online_upgrade
+    - online_upgrade_cinder
+  when: step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop cinder api container
+    vars:
+      tripleo_containers_to_stop:
+      - cinder_api
+      - cinder_api_cron
+      tripleo_delegate_to: '{{ groups[''cinder_api''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when: step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop cinder scheduler container
+    vars:
+      tripleo_containers_to_stop:
+      - cinder_scheduler
+      tripleo_delegate_to: '{{ groups[''cinder_scheduler''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop clustercheck container
+    vars:
+      tripleo_containers_to_stop:
+      - clustercheck
+      tripleo_delegate_to: '{{ groups[''clustercheck''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop glance api container
+    vars:
+      tripleo_containers_to_stop:
+      - glance_api
+      - glance_api_cron
+      tripleo_delegate_to: '{{ groups[''glance_api''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop glance api internal container
+    vars:
+      tripleo_containers_to_stop:
+      - glance_api_internal
+      tripleo_delegate_to: '{{ groups[''glance_api_internal''] | default([]) }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop heat api container
+    vars:
+      tripleo_containers_to_stop:
+      - heat_api
+      - heat_api_cron
+      tripleo_delegate_to: '{{ groups[''heat_api''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop heat cfn container
+    vars:
+      tripleo_containers_to_stop:
+      - heat_api_cfn
+      tripleo_delegate_to: '{{ groups[''heat_api_cfn''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop heat engine container
+    vars:
+      tripleo_containers_to_stop:
+      - heat_engine
+      tripleo_delegate_to: '{{ groups[''heat_engine''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop horizon container
+    vars:
+      tripleo_containers_to_stop:
+      - horizon
+      tripleo_delegate_to: '{{ groups[''horizon''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop keystone container
+    vars:
+      tripleo_containers_to_stop:
+      - keystone
+      - keystone_cron
+      tripleo_delegate_to: '{{ groups[''keystone''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop memcached container
+    vars:
+      tripleo_containers_to_stop:
+      - memcached
+      tripleo_delegate_to: '{{ groups[''memcached''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - include_role:
+      name: tripleo_transfer
+    name: Transfer mysql data
+    vars:
+      tripleo_transfer_dest_dir: /var/lib/mysql
+      tripleo_transfer_dest_host: '{{hostvars[groups[''overcloud''][0]][''mysql_short_bootstrap_node_name'']}}'
+      tripleo_transfer_exclude: /*
+      tripleo_transfer_flag_file: /var/lib/tripleo/transfer-flags/var-lib-mysql
+      tripleo_transfer_include:
+      - /ibdata*
+      - /ib_lru_dump
+      - /ib_logfile[0-9]*
+      - /undo*
+      - /*/
+      tripleo_transfer_src_dir: /var/lib/mysql
+      tripleo_transfer_src_host: '{{hostvars[groups[''overcloud''][0]][''mysql_short_node_names''][1]}}'
+      tripleo_transfer_sync_options: --whole-file --ignore-times --inplace --archive
+        --delete
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  vars:
+    mysql_upgrade_transfer: true
+  when:
+  - step|int == 2
+  - mysql_upgrade_transfer
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop neutron api container
+    vars:
+      tripleo_containers_to_stop:
+      - neutron_api
+      tripleo_delegate_to: '{{ groups[''neutron_api''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop nova api container
+    vars:
+      tripleo_containers_to_stop:
+      - nova_api
+      - nova_api_cron
+      tripleo_delegate_to: '{{ groups[''nova_api''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - become: true
+    command: '{{ container_cli }} exec nova_conductor nova-manage db online_data_migrations'
+    delegate_to: '{{ (groups[''nova_conductor''] | difference(groups[''excluded_overcloud'']))[0]
+      }}'
+    name: Online data migration for Nova
+    tags:
+    - online_upgrade
+    - online_upgrade_nova
+  when: step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop nova conductor container
+    vars:
+      tripleo_containers_to_stop:
+      - nova_conductor
+      tripleo_delegate_to: '{{ groups[''nova_conductor''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop nova metadata container
+    vars:
+      tripleo_containers_to_stop:
+      - nova_metadata
+      tripleo_delegate_to: '{{ groups[''nova_metadata''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop nova scheduler container
+    vars:
+      tripleo_containers_to_stop:
+      - nova_scheduler
+      tripleo_delegate_to: '{{ groups[''nova_scheduler''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop nova vnc proxy container
+    vars:
+      tripleo_containers_to_stop:
+      - nova_vnc_proxy
+      tripleo_delegate_to: '{{ groups[''nova_vnc_proxy''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - import_role:
+      name: tripleo_container_stop
+    name: Stop logrotate container
+    vars:
+      tripleo_containers_to_stop:
+      - logrotate_crond
+      tripleo_delegate_to: '{{ groups[''logrotate_crond''] | difference(groups[''excluded_overcloud''])
+        }}'
+  tags:
+  - never
+  - system_upgrade_transfer_data
+  - system_upgrade_stop_services
+  when:
+  - step|int == 1
+- block:
+  - become: true
+    delegate_to: '{{ item }}'
+    name: Stop cluster
+    shell: "set -eu\nFILE=/usr/sbin/pcs\nif test -f \"$FILE\"; then\n  /usr/sbin/pcs\
+      \ cluster stop --force\nfi\n"
+    with_items: '{{ groups[''pacemaker''] | difference(groups[''excluded_overcloud''])
+      }}'
+  tags:
+  - never
+  - system_upgrade_stop_services
+  - system_upgrade_transfer_data
+  when:
+  - step|int == 1
+- block:
+  - include_role:
+      name: tripleo_persist
+      tasks_from: cleanup.yml
+    name: cleanup tripleo_persist
+  name: Clean up upgrade artifacts
+  tags:
+  - never
+  - system_upgrade_cleanup
+  when: step|int == 1

@@ -1,0 +1,249 @@
+# Resource Registry
+resource_registry:
+  OS::TripleO::Server: deployed-server/deployed-server.yaml
+
+# Parameter Defaults
+parameter_defaults:
+  StackAction: CREATE
+  DeployIdentifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+  SoftwareConfigTransport: POLL_SERVER_HEAT
+  RootStackName: overcloud
+  NeutronPublicInterface: nic3
+  ComputeHCIHostnameFormat: "computehci-%index%"
+  ComputeHCICount: 2
+  ControllerHostnameFormat: "controller-%index%"
+  ControllerCount: 3
+  #
+  # VM NIC templates
+  ControllerNetworkConfigTemplate: 'controller-nic-template.j2'
+  #
+  # HostnameMap
+  HostnameMap:
+    computehci-0: computehci-0
+    computehci-1: computehci-1
+    controller-0: controller-0
+    controller-1: controller-1
+    controller-2: controller-2
+  # https://docs.openstack.org/project-deploy-guide/tripleo-docs/latest/features/custom_networks.html
+  # https://docs.openstack.org/project-deploy-guide/tripleo-docs/latest/features/deployed_server.html
+  # https://specs.openstack.org/openstack/tripleo-specs/specs/wallaby/triplo-network-data-v2-node-ports.html
+  DeployedServerPortMap:
+    computehci-0-ctlplane:
+      fixed_ips:
+        - ip_address: 172.16.1.15
+    computehci-1-ctlplane:
+      fixed_ips:
+        - ip_address: 172.16.1.16
+    controller-0-ctlplane:
+      fixed_ips:
+        - ip_address: 172.16.1.12
+    controller-1-ctlplane:
+      fixed_ips:
+        - ip_address: 172.16.1.13
+    controller-2-ctlplane:
+      fixed_ips:
+        - ip_address: 172.16.1.14
+  #
+  # NodePortMap
+  NodePortMap:
+    computehci-0:
+      ctlplane:
+        ip_address: 172.16.1.15
+        ip_address_uri: '172.16.1.15'
+        ip_subnet: 172.16.1.15/24
+      external:
+        ip_address: 192.168.131.65
+        ip_address_uri: '192.168.131.65'
+        ip_subnet: 192.168.131.65/25
+      internal_api:
+        ip_address: 172.16.2.17
+        ip_address_uri: '172.16.2.17'
+        ip_subnet: 172.16.2.17/24
+      storage:
+        ip_address: 172.16.4.14
+        ip_address_uri: '172.16.4.14'
+        ip_subnet: 172.16.4.14/24
+      storage_mgmt:
+        ip_address: 172.16.5.14
+        ip_address_uri: '172.16.5.14'
+        ip_subnet: 172.16.5.14/24
+      tenant:
+        ip_address: 172.16.3.13
+        ip_address_uri: '172.16.3.13'
+        ip_subnet: 172.16.3.13/24
+    computehci-1:
+      ctlplane:
+        ip_address: 172.16.1.16
+        ip_address_uri: '172.16.1.16'
+        ip_subnet: 172.16.1.16/24
+      external:
+        ip_address: 192.168.131.66
+        ip_address_uri: '192.168.131.66'
+        ip_subnet: 192.168.131.66/25
+      internal_api:
+        ip_address: 172.16.2.18
+        ip_address_uri: '172.16.2.18'
+        ip_subnet: 172.16.2.18/24
+      storage:
+        ip_address: 172.16.4.15
+        ip_address_uri: '172.16.4.15'
+        ip_subnet: 172.16.4.15/24
+      storage_mgmt:
+        ip_address: 172.16.5.15
+        ip_address_uri: '172.16.5.15'
+        ip_subnet: 172.16.5.15/24
+      tenant:
+        ip_address: 172.16.3.14
+        ip_address_uri: '172.16.3.14'
+        ip_subnet: 172.16.3.14/24
+    controller-0:
+      ctlplane:
+        ip_address: 172.16.1.12
+        ip_address_uri: '172.16.1.12'
+        ip_subnet: 172.16.1.12/24
+      external:
+        ip_address: 192.168.131.62
+        ip_address_uri: '192.168.131.62'
+        ip_subnet: 192.168.131.62/25
+      internal_api:
+        ip_address: 172.16.2.14
+        ip_address_uri: '172.16.2.14'
+        ip_subnet: 172.16.2.14/24
+      storage:
+        ip_address: 172.16.4.11
+        ip_address_uri: '172.16.4.11'
+        ip_subnet: 172.16.4.11/24
+      storage_mgmt:
+        ip_address: 172.16.5.10
+        ip_address_uri: '172.16.5.10'
+        ip_subnet: 172.16.5.10/24
+      tenant:
+        ip_address: 172.16.3.10
+        ip_address_uri: '172.16.3.10'
+        ip_subnet: 172.16.3.10/24
+    controller-1:
+      ctlplane:
+        ip_address: 172.16.1.13
+        ip_address_uri: '172.16.1.13'
+        ip_subnet: 172.16.1.13/24
+      external:
+        ip_address: 192.168.131.63
+        ip_address_uri: '192.168.131.63'
+        ip_subnet: 192.168.131.63/25
+      internal_api:
+        ip_address: 172.16.2.15
+        ip_address_uri: '172.16.2.15'
+        ip_subnet: 172.16.2.15/24
+      storage:
+        ip_address: 172.16.4.12
+        ip_address_uri: '172.16.4.12'
+        ip_subnet: 172.16.4.12/24
+      storage_mgmt:
+        ip_address: 172.16.5.12
+        ip_address_uri: '172.16.5.12'
+        ip_subnet: 172.16.5.12/24
+      tenant:
+        ip_address: 172.16.3.11
+        ip_address_uri: '172.16.3.11'
+        ip_subnet: 172.16.3.11/24
+    controller-2:
+      ctlplane:
+        ip_address: 172.16.1.14
+        ip_address_uri: '172.16.1.14'
+        ip_subnet: 172.16.1.14/24
+      external:
+        ip_address: 192.168.131.64
+        ip_address_uri: '192.168.131.64'
+        ip_subnet: 192.168.131.64/25
+      internal_api:
+        ip_address: 172.16.2.16
+        ip_address_uri: '172.16.2.16'
+        ip_subnet: 172.16.2.16/24
+      storage:
+        ip_address: 172.16.4.13
+        ip_address_uri: '172.16.4.13'
+        ip_subnet: 172.16.4.13/24
+      storage_mgmt:
+        ip_address: 172.16.5.13
+        ip_address_uri: '172.16.5.13'
+        ip_subnet: 172.16.5.13/24
+      tenant:
+        ip_address: 172.16.3.12
+        ip_address_uri: '172.16.3.12'
+        ip_subnet: 172.16.3.12/24
+  #
+  # VipPortMap
+  VipPortMap:
+    external:
+      ip_address: 192.168.131.60
+      ip_address_uri: '192.168.131.60'
+      ip_subnet: 192.168.131.60/25
+    internal_api:
+      ip_address: 172.16.2.10
+      ip_address_uri: '172.16.2.10'
+      ip_subnet: 172.16.2.10/24
+    storage:
+      ip_address: 172.16.4.10
+      ip_address_uri: '172.16.4.10'
+      ip_subnet: 172.16.4.10/24
+    storage_mgmt:
+      ip_address: 172.16.5.11
+      ip_address_uri: '172.16.5.11'
+      ip_subnet: 172.16.5.11/24
+  #
+  # ControlPlaneVipData
+  ControlPlaneVipData:
+    fixed_ips:
+    - ip_address: 172.16.1.10
+    name: control_virtual_ip
+    network:
+      tags:
+      - 172.16.1.0/24
+    subnets:
+    - ip_version: 4
+  #
+  # ControlPlaneSubnet
+  ControlPlaneSubnet: ctlplane-subnet
+  #
+  # Set VIP's for redis and OVN
+  OVNDBsVirtualFixedIPs:
+    - ip_address: 172.16.2.12
+      use_neutron: false
+  RedisVirtualFixedIPs:
+    - ip_address: 172.16.2.11
+      use_neutron: false
+  #
+  # OVNStaticBridgeMacMappings
+  OVNStaticBridgeMacMappings:
+    computehci-0:
+      datacentre: fa:16:3a:bf:c7:03
+    computehci-1:
+      datacentre: fa:16:3a:65:de:4f
+    controller-0:
+      datacentre: fa:16:3a:c7:b6:e1
+    controller-1:
+      datacentre: fa:16:3a:06:75:04
+    controller-2:
+      datacentre: fa:16:3a:e1:78:28
+  #
+  # CtlplaneNetworkAttributes
+  CtlplaneNetworkAttributes:
+    network:
+      dns_domain: ctlplane.turbo.lab.test.
+      mtu: 1400
+      name: ctlplane
+      tags:
+      - 172.16.1.0/24
+    subnets:
+      ctlplane-subnet:
+        cidr: '172.16.1.0/24'
+        dns_nameservers: 
+          - 192.168.131.20
+        gateway_ip: 
+        host_routes: []
+        ip_version: 4
+        name: ctlplane-subnet
+  #
+  # <role>ControlPlaneSubnet
+  ComputeHCIControlPlaneSubnet: ctlplane-subnet
+  ControllerControlPlaneSubnet: ctlplane-subnet

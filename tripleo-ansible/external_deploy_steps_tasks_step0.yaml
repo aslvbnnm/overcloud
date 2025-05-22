@@ -1,0 +1,46 @@
+- block:
+  - name: create ovn mac address for Controller role nodes
+    tripleo_ovn_mac_addresses:
+      ovn_bridge_mappings:
+      - datacentre:br-ex
+      ovn_static_bridge_mac_mappings:
+        computehci-0:
+          datacentre: fa:16:3a:bf:c7:03
+        computehci-1:
+          datacentre: fa:16:3a:65:de:4f
+        controller-0:
+          datacentre: fa:16:3a:c7:b6:e1
+        controller-1:
+          datacentre: fa:16:3a:06:75:04
+        controller-2:
+          datacentre: fa:16:3a:e1:78:28
+      playbook_dir: '{{ playbook_dir }}'
+      role_name: Controller
+      server_resource_names: '{{ groups["Controller"] }}'
+      stack_name: overcloud
+  name: ovn_controller_external_deploy_init
+  when:
+  - step|int == 0
+- block:
+  - name: create ovn mac address for ComputeHCI role nodes
+    tripleo_ovn_mac_addresses:
+      ovn_bridge_mappings:
+      - datacentre:br-ex
+      ovn_static_bridge_mac_mappings:
+        computehci-0:
+          datacentre: fa:16:3a:bf:c7:03
+        computehci-1:
+          datacentre: fa:16:3a:65:de:4f
+        controller-0:
+          datacentre: fa:16:3a:c7:b6:e1
+        controller-1:
+          datacentre: fa:16:3a:06:75:04
+        controller-2:
+          datacentre: fa:16:3a:e1:78:28
+      playbook_dir: '{{ playbook_dir }}'
+      role_name: ComputeHCI
+      server_resource_names: '{{ groups["ComputeHCI"] }}'
+      stack_name: overcloud
+  name: ovn_controller_external_deploy_init
+  when:
+  - step|int == 0

@@ -1,0 +1,428 @@
+- block:
+  - name: fix grub entries to have name start with GRUB_
+    replace:
+      path: /etc/default/grub
+      regexp: ^(TRIPLEO_HEAT_TEMPLATE_KERNEL_ARGS)(.*)
+      replace: GRUB_\1\2
+  - name: fix grub entries in append statement
+    replace:
+      path: /etc/default/grub
+      regexp: (.*){(TRIPLEO_HEAT_TEMPLATE_KERNEL_ARGS)}(.*)
+      replace: \1{GRUB_\2}\3
+  name: upgrade prepare for leapp to align kernel arg shortcommings in leapp
+  tags:
+  - never
+  - system_upgrade
+  - system_upgrade_prepare
+  when:
+  - step|int == 3
+  - upgrade_leapp_enabled
+- block:
+  - mount:
+      fstype: nfs4
+      name: /var/lib/nova/instances
+      state: absent
+    name: Unmount Nova NFS Share
+    vars:
+      nfs_backend_enable: false
+    when: nfs_backend_enable|bool
+  name: nova_compute pre system_upgrade tasks
+  tags:
+  - never
+  - system_upgrade
+  - system_upgrade_run
+  - system_upgrade_nfsmounts
+  when:
+  - step|int == 3
+  - upgrade_leapp_enabled
+- block:
+  - args:
+      creates: /etc/sysconfig/ip6tables.n-o-upgrade
+    name: blank ipv6 rule before activating ipv6 firewall.
+    shell: cat /etc/sysconfig/ip6tables > /etc/sysconfig/ip6tables.n-o-upgrade; cat</dev/null>/etc/sysconfig/ip6tables
+  - name: cleanup unmanaged rules pushed by iptables-services
+    shell: "iptables -C INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT &>/dev/null\
+      \ && \\\n  iptables -D INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT\n\
+      iptables -C INPUT -p icmp -j ACCEPT &>/dev/null && \\\n  iptables -D INPUT -p\
+      \ icmp -j ACCEPT\niptables -C INPUT -i lo -j ACCEPT &>/dev/null && \\\n  iptables\
+      \ -D INPUT -i lo -j ACCEPT\niptables -C INPUT -p tcp -m state --state NEW -m\
+      \ tcp --dport 22 -j ACCEPT &>/dev/null && \\\n  iptables -D INPUT -p tcp -m\
+      \ state --state NEW -m tcp --dport 22 -j ACCEPT\niptables -C INPUT -j REJECT\
+      \ --reject-with icmp-host-prohibited &>/dev/null && \\\n  iptables -D INPUT\
+      \ -j REJECT --reject-with icmp-host-prohibited\niptables -C FORWARD -j REJECT\
+      \ --reject-with icmp-host-prohibited &>/dev/null && \\\n  iptables -D FORWARD\
+      \ -j REJECT --reject-with icmp-host-prohibited\n\nsed -i '/^-A INPUT -m state\
+      \ --state RELATED,ESTABLISHED -j ACCEPT$/d' /etc/sysconfig/iptables\nsed -i\
+      \ '/^-A INPUT -p icmp -j ACCEPT$/d' /etc/sysconfig/iptables\nsed -i '/^-A INPUT\
+      \ -i lo -j ACCEPT$/d' /etc/sysconfig/iptables\nsed -i '/^-A INPUT -p tcp -m\
+      \ state --state NEW -m tcp --dport 22 -j ACCEPT$/d' /etc/sysconfig/iptables\n\
+      sed -i '/^-A INPUT -j REJECT --reject-with icmp-host-prohibited$/d' /etc/sysconfig/iptables\n\
+      sed -i '/^-A FORWARD -j REJECT --reject-with icmp-host-prohibited$/d' /etc/sysconfig/iptables\n\
+      \nip6tables -C INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT &>/dev/null\
+      \ && \\\n  ip6tables -D INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT\n\
+      ip6tables -C INPUT -p ipv6-icmp -j ACCEPT &>/dev/null && \\\n  ip6tables -D\
+      \ INPUT -p ipv6-icmp -j ACCEPT\nip6tables -C INPUT -i lo -j ACCEPT &>/dev/null\
+      \ && \\\n  ip6tables -D INPUT -i lo -j ACCEPT\nip6tables -C INPUT -p tcp -m\
+      \ state --state NEW -m tcp --dport 22 -j ACCEPT &>/dev/null && \\\n  ip6tables\
+      \ -D INPUT -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT\nip6tables\
+      \ -C INPUT -d fe80::/64 -p udp -m udp --dport 546 -m state --state NEW -j ACCEPT\
+      \ &>/dev/null && \\\n  ip6tables -D INPUT -d fe80::/64 -p udp -m udp --dport\
+      \ 546 -m state --state NEW -j ACCEPT\nip6tables -C INPUT -j REJECT --reject-with\
+      \ icmp6-adm-prohibited &>/dev/null && \\\n  ip6tables -D INPUT -j REJECT --reject-with\
+      \ icmp6-adm-prohibited\nip6tables -C FORWARD -j REJECT --reject-with icmp6-adm-prohibited\
+      \ &>/dev/null && \\\n  ip6tables -D FORWARD -j REJECT --reject-with icmp6-adm-prohibited\n\
+      \nsed -i '/^-A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT$/d' /etc/sysconfig/ip6tables\n\
+      sed -i '/^-A INPUT -p ipv6-icmp -j ACCEPT$/d' /etc/sysconfig/ip6tables\nsed\
+      \ -i '/^-A INPUT -i lo -j ACCEPT$/d' /etc/sysconfig/ip6tables\nsed -i '/^-A\
+      \ INPUT -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT$/d' /etc/sysconfig/ip6tables\n\
+      sed -i '/^-A INPUT -d fe80::\\/64 -p udp -m udp --dport 546 -m state --state\
+      \ NEW -j ACCEPT$/d' /etc/sysconfig/ip6tables\nsed -i '/^-A INPUT -j REJECT --reject-with\
+      \ icmp6-adm-prohibited$/d' /etc/sysconfig/ip6tables\nsed -i '/^-A FORWARD -j\
+      \ REJECT --reject-with icmp6-adm-prohibited$/d' /etc/sysconfig/ip6tables"
+  when:
+  - (step | int) == 3
+- name: Gather missing facts
+  setup:
+    gather_subset:
+    - '!all'
+    - '!min'
+    - distribution
+  tags:
+  - always
+- name: Set leapp facts
+  set_fact:
+    upgrade_leapp_command_options: ''
+    upgrade_leapp_debug: false
+    upgrade_leapp_devel_skip: ''
+    upgrade_leapp_enabled: "{{ _upgradeLeappEnabled | bool and\n   ansible_facts['distribution']\
+      \ == 'RedHat' and\n   ansible_facts['distribution_major_version'] is version('8',\
+      \ '==') }}"
+    upgrade_leapp_post_reboot_delay: 120
+    upgrade_leapp_reboot_timeout: 3600
+  tags:
+  - always
+  vars:
+    _upgradeLeappEnabled: false
+- block:
+  - name: Run LeappRepoInitCommand
+    shell: '#!/bin/bash
+
+
+      '
+  - name: install leapp
+    package:
+      name: leapp-repository-openstack
+      state: latest
+  - name: Run LeappInitCommand
+    shell: '#!/bin/bash
+
+
+      '
+  - lineinfile:
+      line: '{{ item }}'
+      path: /etc/leapp/transaction/to_remove
+    loop: '{{ pkg_to_remove }}'
+    name: add packages into Leapp's to_remove file
+    vars:
+      pkg_to_remove: []
+  - lineinfile:
+      line: '{{ item }}'
+      path: /etc/leapp/transaction/to_install
+    loop: '{{ pkg_to_install }}'
+    name: add packages into Leapp's to_install file
+    vars:
+      pkg_to_install: []
+  - name: check sshd_config file
+    register: sshd_config_result
+    stat:
+      path: /etc/ssh/sshd_config
+  - lineinfile:
+      line: PermitRootLogin without-password
+      path: /etc/ssh/sshd_config
+      regexp: ^(# *)?PermitRootLogin
+    name: add PermitRootLogin option for leapp
+  name: system_upgrade_prepare step 3
+  tags:
+  - never
+  - system_upgrade
+  - system_upgrade_prepare
+  when:
+  - step|int == 3
+  - upgrade_leapp_enabled
+- block:
+  - block:
+    - name: Run UpgradeInitCommand
+      shell: '#!/bin/bash
+
+
+        if [[ -f /etc/resolv.conf.save ]] ; then rm /etc/resolv.conf.save; fi
+
+
+        '
+    - name: Run UpgradeInitCommonCommand
+      shell: '#!/bin/bash
+
+
+        '
+    - dnf:
+        name: '@{{ item.module }}:{{ item.stream }}/{{ item.profile|default(''common'')
+          }}'
+        state: present
+      loop: '{{ dnf_module_list|list }}'
+      name: Ensure DNF modules have the right stream
+      vars:
+        dnf_module_list: []
+      when:
+      - dnf_module_list|length > 0
+      - item.distribution_version is defined
+      - ansible_facts['distribution_major_version'] is version(item.distribution_version,
+        '==')
+    - name: Ensure TripleO prerequisite packages are installed
+      package:
+        name:
+        - jq
+        - lvm2
+        - openstack-selinux
+        - os-net-config
+        - puppet-tripleo
+        - python3-heat-agent*
+        - rsync
+        state: present
+      when: ansible_facts['distribution_major_version'] is version('8', '==')
+    - name: Ensure TripleO prerequisite packages are installed and use role based
+        heat variable to provide specific list of packages
+      package:
+        name: '{{ base_tripleo_packages }}'
+        state: present
+      vars:
+        base_tripleo_packages: []
+      when:
+      - ansible_facts['distribution_major_version'] is version('8', '==')
+      - base_tripleo_packages|length > 0
+    - name: WA for 2240185 - If the image is schema 1 and lacks signatures than add
+        empty signatures
+      shell: "for manifest_file in `find /var/lib/containers/storage/overlay-images/\
+        \ -name 'manifest'`\ndo\n    cat <<< $( jq  'if .schemaVersion == 1 then if\
+        \ has(\"signatures\") then . else .signatures=[] end else . end' $manifest_file\
+        \ ) > $manifest_file\ndone\n"
+      when: ansible_facts['distribution_major_version'] is version('8', '==')
+    name: Package and repo update tasks
+    when: step|int == 0
+  - check_mode: false
+    command: /usr/bin/rpm -q libvirt-daemon
+    failed_when: false
+    name: check if libvirt is installed
+    register: libvirt_installed
+    when: step|int == 0
+  - loop:
+    - libvirtd.service
+    - virtlogd.socket
+    name: make sure libvirt services are disabled and masked
+    service:
+      daemon_reload: true
+      enabled: false
+      masked: true
+      name: '{{ item }}'
+      state: stopped
+    when:
+    - step|int == 0
+    - libvirt_installed.rc == 0
+  - name: Special treatment for OpenvSwitch
+    register: ovs_upgrade
+    tripleo_ovs_upgrade: null
+    when:
+    - step|int == 2
+  - name: Always ensure the openvswitch service is enabled and running after upgrades
+    service:
+      enabled: true
+      name: openvswitch
+      state: started
+    when:
+    - step|int == 2
+    - ovs_upgrade.changed|bool
+  - name: Check for os-net-config upgrade
+    register: os_net_config_need_upgrade
+    shell: yum check-upgrade | awk '/os-net-config/{print}'
+    when: step|int == 3
+  - name: Check that os-net-config has configuration
+    register: stat_config_json
+    stat:
+      get_attributes: false
+      get_checksum: false
+      get_mime: false
+      path: /etc/os-net-config/config.json
+    when: step|int == 3
+  - block:
+    - name: Upgrade os-net-config
+      package: name=os-net-config state=latest
+    - changed_when: os_net_config_upgrade.rc == 2
+      command: os-net-config --no-activate -c /etc/os-net-config/config.json -v --detailed-exit-codes
+      failed_when: os_net_config_upgrade.rc not in [0,2]
+      name: take new os-net-config parameters into account now
+      register: os_net_config_upgrade
+    when:
+    - step|int == 3
+    - os_net_config_need_upgrade.stdout
+    - stat_config_json.stat.exists
+  - name: Update all packages
+    vars:
+      skip_package_update: false
+    when:
+    - step|int == 3
+    - not skip_package_update|bool
+    yum:
+      exclude: ansible-core
+      name: '*'
+      state: latest
+  name: Host packages setup
+  tags: setup_packages
+- name: set first_controller fact
+  set_fact:
+    first_controller: '{{ groups[''ovn_controller'']|first|lower == ansible_facts[''hostname'']|lower
+      }}'
+- block:
+  - async: 600
+    become: true
+    containers.podman.podman_image:
+      force: true
+      name: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+      validate_certs: false
+    delegate_to: '{{ item }}'
+    loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+      }}'
+    name: Force pull image in case image name doesn't change.
+    poll: 0
+    register: ovn_controller_image_update
+    tags:
+    - ovn
+    - ovn_image
+    when: step|int == 1
+  - async_status:
+      jid: '{{ async_result_item.ansible_job_id }}'
+    become: true
+    delay: 1
+    delegate_to: '{{ async_result_item.item }}'
+    loop: '{{ovn_controller_image_update.results }}'
+    loop_control:
+      loop_var: async_result_item
+    name: Was the ovn_controller image pull successful.
+    register: async_poll_results
+    retries: 600
+    tags:
+    - ovn
+    - ovn_image
+    until: async_poll_results.finished
+    when:
+    - step|int == 1
+    - '''results'' in ovn_controller_image_update'
+  - debug:
+      msg: ovn container will be using {{ image }}
+    name: OVN Container image used
+    tags: ovn
+    vars:
+      image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+    when: step|int == 1
+  - async: 600
+    become: true
+    delegate_to: '{{ item }}'
+    loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+      }}'
+    name: Update OVN OVS related parameters before update.
+    poll: 0
+    register: ovs_vsctl
+    shell: 'set -e
+
+      ovs-vsctl set Open_vSwitch . external_ids:ovn-ofctrl-wait-before-clear={{ timeout
+      }}
+
+      ovs-vsctl set Open_vSwitch . external_ids:ovn-monitor-all=true
+
+      ovs-vsctl set Open_vSwitch . external_ids:ovn-match-northd-version=false
+
+      '
+    tags:
+    - ovn
+    vars:
+      timeout: 8000
+    when:
+    - step|int == 1
+  - async_status:
+      jid: '{{ async_result_item.ansible_job_id }}'
+    become: true
+    delay: 1
+    delegate_to: '{{ async_result_item.item }}'
+    loop: '{{ovs_vsctl.results }}'
+    loop_control:
+      loop_var: async_result_item
+    name: Was the update of OVN OVS related parameter successful.
+    register: async_poll_results
+    retries: 600
+    tags:
+    - ovn
+    until: async_poll_results.finished
+    when:
+    - step|int == 1
+    - '''results'' in ovs_vsctl'
+  - set_fact:
+      any_ovn_host: '{{groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+        | first }}'
+    tags: ovn
+    when: step|int == 1
+  - become: true
+    delegate_to: '{{ any_ovn_host }}'
+    find:
+      paths: /var/lib/tripleo-config/container-startup-config/
+      patterns: '*ovn_controller.json'
+      recurse: true
+    name: Find ovn_controller configs in container-startup-configs
+    register: ovn_cont_17_0
+    tags:
+    - ovn
+    when: (step|int == 1) and (any_ovn_host is defined) and (any_ovn_host|length >
+      0)
+  - name: get directory path from the ovn_cont_17_0
+    set_fact:
+      ovn_config_path: '{{ ovn_cont_17_0.files.0.path | dirname }}'
+    tags: ovn
+    when: step|int == 1
+  - async: 600
+    become: true
+    delegate_to: '{{ item }}'
+    loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+      }}'
+    name: Update ovn_controller.
+    poll: 0
+    register: ovn_controller_update
+    tags: ovn
+    tripleo_container_manage:
+      config_dir: '{{ ovn_config_path }}'
+      config_id:
+      - tripleo_step{{config_step}}
+      config_overrides:
+        .*ovn_controller:
+          image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+          name: ovn_controller
+      config_patterns: '*ovn_controller.json'
+      debug: '{{ enable_debug | bool }}'
+      log_base_path: '{{ container_log_stdout_path }}'
+    vars:
+      config_step: '{{ (''step_4'' in ovn_config_path) | ternary(''4'', ''3'')}}'
+    when: step|int == 1
+  - async_status:
+      jid: '{{ async_result_item.ansible_job_id }}'
+    become: true
+    delay: 1
+    delegate_to: '{{ async_result_item.item }}'
+    loop: '{{ovn_controller_update.results }}'
+    loop_control:
+      loop_var: async_result_item
+    name: Was the ovn_controller successful.
+    register: async_poll_results
+    retries: 600
+    tags: ovn
+    until: async_poll_results.finished
+    when:
+    - step|int == 1
+    - '''results'' in ovn_controller_update'
+  name: Trigger external_update OVN block on first controller
+  when: first_controller | bool

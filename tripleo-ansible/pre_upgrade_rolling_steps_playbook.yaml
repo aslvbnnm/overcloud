@@ -1,0 +1,28 @@
+- import_playbook: common_deploy_steps_playbooks.yaml
+  vars:
+    deploy_source_host: "Undercloud:Controller"
+    deploy_target_host: "overcloud"
+- hosts: Controller
+  name: Run pre-upgrade rolling tasks
+  serial:  1
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  tasks:
+    - include_tasks: pre_upgrade_rolling_steps_tasks.yaml
+      with_sequence: start=0 end=0
+      loop_control:
+        loop_var: step
+- import_playbook: common_deploy_steps_playbooks.yaml
+  vars:
+    deploy_source_host: "Undercloud:ComputeHCI"
+    deploy_target_host: "overcloud"
+- hosts: ComputeHCI
+  name: Run pre-upgrade rolling tasks
+  serial:  1
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  tasks:
+    - include_tasks: pre_upgrade_rolling_steps_tasks.yaml
+      with_sequence: start=0 end=0
+      loop_control:
+        loop_var: step

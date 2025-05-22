@@ -1,0 +1,608 @@
+- include_role:
+    name: tuned
+  name: Configure tuned before reboot
+  vars:
+    tuned_isolated_cores: ''
+    tuned_profile: throughput-performance
+  when: step|int == 0
+- include_role:
+    name: tripleo_kernel
+    tasks_from: kernelargs.yml
+  name: Configure kernel args and reboot
+  vars:
+    tripleo_kernel_args: ''
+    tripleo_kernel_defer_reboot: false
+    tripleo_kernel_hugepages: {}
+    tripleo_kernel_hugepages_remove: false
+    tripleo_kernel_reboot_timeout: 900
+  when: step|int == 0
+- block:
+  - file:
+      path: '{{ item }}'
+      serole: object_r
+      setype: cert_t
+      seuser: system_u
+      state: directory
+    name: Create dirs for certificates and keys
+    with_items:
+    - /etc/pki/tls/certs/httpd
+    - /etc/pki/tls/private/httpd
+  - include_role:
+      name: linux-system-roles.certificate
+    vars:
+      certificate_requests:
+      - ca: ipa
+        dns: '{{ fqdn_ctlplane }}'
+        key_size: '2048'
+        name: httpd-ctlplane
+        principal: HTTP/{{ fqdn_ctlplane }}@{{ idm_realm }}
+        run_after: 'cp /etc/pki/tls/certs/httpd-ctlplane.crt /etc/pki/tls/certs/httpd/httpd-ctlplane.crt
+
+          cp /etc/pki/tls/private/httpd-ctlplane.key /etc/pki/tls/private/httpd/httpd-ctlplane.key
+
+          pkill -USR1 httpd
+
+          '
+      - ca: ipa
+        dns: '{{ fqdn_external }}'
+        key_size: '2048'
+        name: httpd-external
+        principal: HTTP/{{ fqdn_external }}@{{ idm_realm }}
+        run_after: 'cp /etc/pki/tls/certs/httpd-external.crt /etc/pki/tls/certs/httpd/httpd-external.crt
+
+          cp /etc/pki/tls/private/httpd-external.key /etc/pki/tls/private/httpd/httpd-external.key
+
+          pkill -USR1 httpd
+
+          '
+      - ca: ipa
+        dns: '{{ fqdn_internal_api }}'
+        key_size: '2048'
+        name: httpd-internal_api
+        principal: HTTP/{{ fqdn_internal_api }}@{{ idm_realm }}
+        run_after: 'cp /etc/pki/tls/certs/httpd-internal_api.crt /etc/pki/tls/certs/httpd/httpd-internal_api.crt
+
+          cp /etc/pki/tls/private/httpd-internal_api.key /etc/pki/tls/private/httpd/httpd-internal_api.key
+
+          pkill -USR1 httpd
+
+          '
+      - ca: ipa
+        dns: '{{ fqdn_storage }}'
+        key_size: '2048'
+        name: httpd-storage
+        principal: HTTP/{{ fqdn_storage }}@{{ idm_realm }}
+        run_after: 'cp /etc/pki/tls/certs/httpd-storage.crt /etc/pki/tls/certs/httpd/httpd-storage.crt
+
+          cp /etc/pki/tls/private/httpd-storage.key /etc/pki/tls/private/httpd/httpd-storage.key
+
+          pkill -USR1 httpd
+
+          '
+      - ca: ipa
+        dns: '{{ fqdn_storage_mgmt }}'
+        key_size: '2048'
+        name: httpd-storage_mgmt
+        principal: HTTP/{{ fqdn_storage_mgmt }}@{{ idm_realm }}
+        run_after: 'cp /etc/pki/tls/certs/httpd-storage_mgmt.crt /etc/pki/tls/certs/httpd/httpd-storage_mgmt.crt
+
+          cp /etc/pki/tls/private/httpd-storage_mgmt.key /etc/pki/tls/private/httpd/httpd-storage_mgmt.key
+
+          pkill -USR1 httpd
+
+          '
+  name: Certificate generation
+  when:
+  - step|int == 1
+  - enable_internal_tls
+- import_role:
+    name: tripleo_container_tag
+  name: Cinder Volume tag container image for pacemaker
+  vars:
+    container_image: registry.redhat.io/rhosp-rhel9/openstack-cinder-volume:17.1.6
+    container_image_latest: cluster.common.tag/cinder-volume:pcmklatest
+  when: step|int == 1
+- block:
+  - import_role:
+      name: tripleo_ha_wrapper
+    name: Cinder volume puppet bundle
+    vars:
+      tripleo_ha_wrapper_bundle_name: openstack-cinder-volume
+      tripleo_ha_wrapper_config_suffix: .cinder_volume_previous_run
+      tripleo_ha_wrapper_puppet_config_volume: cinder
+      tripleo_ha_wrapper_puppet_debug: false
+      tripleo_ha_wrapper_puppet_execute: include ::tripleo::profile::base::pacemaker;
+        include ::tripleo::profile::pacemaker::cinder::volume_bundle
+      tripleo_ha_wrapper_puppet_tags: pacemaker::resource::bundle,pacemaker::property,pacemaker::resource::ip,pacemaker::resource::ocf,pacemaker::constraint::order,pacemaker::constraint::colocation
+      tripleo_ha_wrapper_resource_name: openstack-cinder-volume
+      tripleo_ha_wrapper_resource_state: _ Started
+      tripleo_ha_wrapper_service_name: cinder_volume
+  name: Cinder Volume HA Wrappers Step
+  when: step|int == 5
+- block:
+  - name: Check if rsyslog exists
+    register: rsyslog_config
+    shell: systemctl is-active rsyslog
+  - block:
+    - blockinfile:
+        content: 'if $syslogfacility-text == ''{{facility}}'' and $programname ==
+          ''haproxy'' then -/var/log/containers/haproxy/haproxy.log
+
+          & stop
+
+          '
+        create: true
+        path: /etc/rsyslog.d/openstack-haproxy.conf
+      name: Forward logging to haproxy.log file
+      register: logconfig
+      vars:
+        facility: local0
+    - name: restart rsyslog service after logging conf change
+      service:
+        name: rsyslog
+        state: restarted
+      when: logconfig is changed
+    when:
+    - rsyslog_config is changed
+    - rsyslog_config.rc == 0
+  name: Configure rsyslog for HAproxy container managed by Pacemaker
+  when: step|int == 1
+- import_role:
+    name: tripleo_container_tag
+  name: HAproxy tag container image for pacemaker
+  vars:
+    container_image: registry.redhat.io/rhosp-rhel9/openstack-haproxy:17.1.6
+    container_image_latest: cluster.common.tag/haproxy:pcmklatest
+  when: step|int == 1
+- block:
+  - import_role:
+      name: tripleo_ha_wrapper
+    name: HAproxy puppet bundle
+    vars:
+      tripleo_ha_wrapper_bundle_name: haproxy-bundle
+      tripleo_ha_wrapper_config_suffix: .previous_run
+      tripleo_ha_wrapper_puppet_config_volume: haproxy
+      tripleo_ha_wrapper_puppet_debug: false
+      tripleo_ha_wrapper_puppet_execute: include ::tripleo::profile::base::pacemaker;
+        include ::tripleo::profile::pacemaker::haproxy_bundle
+      tripleo_ha_wrapper_puppet_tags: pacemaker::resource::bundle,pacemaker::property,pacemaker::resource::ip,pacemaker::resource::ocf,pacemaker::constraint::order,pacemaker::constraint::colocation
+      tripleo_ha_wrapper_resource_name: haproxy-bundle
+      tripleo_ha_wrapper_resource_state: Started
+      tripleo_ha_wrapper_service_name: haproxy
+  name: HAproxy HA Wrappers Step
+  when: step|int == 2
+- include_role:
+    name: tripleo_lvmfilter
+  name: Run lvmfilter role
+  when:
+  - step|int == 1
+- containers.podman.podman_container_info:
+    name: keystone
+  delay: 30
+  failed_when:
+  - keystone_infos.containers.0.Healthcheck.Status is defined
+  - '''healthy'' not in keystone_infos.containers.0.Healthcheck.Status'
+  name: validate keystone container state
+  register: keystone_infos
+  retries: 10
+  tags:
+  - opendev-validation
+  - opendev-validation-keystone
+  when:
+  - container_cli == 'podman'
+  - not container_healthcheck_disabled
+  - step|int == 4
+- block:
+  - include_role:
+      name: linux-system-roles.certificate
+    vars:
+      certificate_requests:
+      - ca: ipa
+        dns:
+        - '{{fqdn_internal_api}}'
+        - '{{cloud_names.cloud_name_internal_api}}'
+        key_size: '2048'
+        name: mysql
+        principal: mysql/{{fqdn_internal_api}}@{{idm_realm}}
+  name: Certificate generation
+  when:
+  - step|int == 1
+  - enable_internal_tls
+- import_role:
+    name: tripleo_container_tag
+  name: MySQL tag container image for pacemaker
+  vars:
+    container_image: registry.redhat.io/rhosp-rhel9/openstack-mariadb:17.1.6
+    container_image_latest: cluster.common.tag/mariadb:pcmklatest
+  when: step|int == 1
+- block:
+  - import_role:
+      name: tripleo_ha_wrapper
+    name: Mysql puppet bundle
+    vars:
+      tripleo_ha_wrapper_bundle_name: galera-bundle
+      tripleo_ha_wrapper_config_suffix: .previous_run
+      tripleo_ha_wrapper_puppet_config_volume: mysql
+      tripleo_ha_wrapper_puppet_debug: false
+      tripleo_ha_wrapper_puppet_execute: '["Mysql_datadir", "Mysql_user", "Mysql_database",
+        "Mysql_grant", "Mysql_plugin"].each |String $val| { noop_resource($val) };
+        include ::tripleo::profile::base::pacemaker; include ::tripleo::profile::pacemaker::database::mysql_bundle'
+      tripleo_ha_wrapper_puppet_tags: pacemaker::resource::bundle,pacemaker::property,pacemaker::resource::ocf,pacemaker::constraint::order,pacemaker::constraint::colocation
+      tripleo_ha_wrapper_resource_name: galera
+      tripleo_ha_wrapper_resource_state: Master
+      tripleo_ha_wrapper_service_name: mysql
+  name: MySQL HA Wrappers Step
+  when: step|int == 2
+- containers.podman.podman_container_info:
+    name: nova_api
+  delay: 30
+  failed_when:
+  - nova_api_infos.containers.0.Healthcheck.Status is defined
+  - '''healthy'' not in nova_api_infos.containers.0.Healthcheck.Status'
+  name: validate nova-api container state
+  register: nova_api_infos
+  retries: 10
+  tags:
+  - opendev-validation
+  - opendev-validation-nova
+  when:
+  - container_cli == 'podman'
+  - not container_healthcheck_disabled
+  - step|int == 4
+- containers.podman.podman_container_info:
+    name: nova_conductor
+  delay: 30
+  failed_when:
+  - nova_conductor_infos.containers.0.Healthcheck.Status is defined
+  - '''healthy'' not in nova_conductor_infos.containers.0.Healthcheck.Status'
+  name: validate nova-conductor container state
+  register: nova_conductor_infos
+  retries: 10
+  tags:
+  - opendev-validation
+  - opendev-validation-nova
+  when:
+  - container_cli == 'podman'
+  - not container_healthcheck_disabled
+  - step|int == 5
+- containers.podman.podman_container_info:
+    name: nova_metadata
+  delay: 30
+  failed_when:
+  - nova_metadata_infos.containers.0.Healthcheck.Status is defined
+  - '''healthy'' not in nova_metadata_infos.containers.0.Healthcheck.Status'
+  name: validate nova-metadata container state
+  register: nova_metadata_infos
+  retries: 10
+  tags:
+  - opendev-validation
+  - opendev-validation-nova
+  when:
+  - container_cli == 'podman'
+  - not container_healthcheck_disabled
+  - step|int == 5
+- containers.podman.podman_container_info:
+    name: nova_scheduler
+  delay: 30
+  failed_when:
+  - nova_scheduler_infos.containers.0.Healthcheck.Status is defined
+  - '''healthy'' not in nova_scheduler_infos.containers.0.Healthcheck.Status'
+  name: validate nova-scheduler container state
+  register: nova_scheduler_infos
+  retries: 10
+  tags:
+  - opendev-validation
+  - opendev-validation-nova
+  when:
+  - container_cli == 'podman'
+  - not container_healthcheck_disabled
+  - step|int == 5
+- containers.podman.podman_container_info:
+    name: nova_vnc_proxy
+  delay: 30
+  failed_when:
+  - nova_vnc_proxy_infos.containers.0.Healthcheck.Status is defined
+  - '''healthy'' not in nova_vnc_proxy_infos.containers.0.Healthcheck.Status'
+  name: validate nova-vnc-proxy container state
+  register: nova_vnc_proxy_infos
+  retries: 10
+  tags:
+  - opendev-validation
+  - opendev-validation-nova
+  when:
+  - container_cli == 'podman'
+  - not container_healthcheck_disabled
+  - step|int == 5
+- block:
+  - copy:
+      content: "#!/bin/sh\ntmpwatch --nodirs \\\n  -X \"/var/log/containers/*/*log\"\
+        \ \\\n  -X \"/var/log/containers/*/*/*log\" \\\n  -X \"/var/log/containers/*/*err\"\
+        \ \\\n  {{ LogrotatePurgeAfterDays|int +1 }}d \\\n  /var/log/containers/ 2>&1\
+        \ | logger -t container-tmpwatch\n"
+      dest: /usr/local/sbin/containers-tmpwatch
+      group: root
+      mode: 493
+      owner: root
+    name: Push script
+    vars:
+      LogrotatePurgeAfterDays: '14'
+  - cron:
+      job: /usr/local/sbin/containers-tmpwatch
+      name: Remove old logs
+      special_time: daily
+      user: root
+    name: Insert cronjob in root crontab
+  name: configure tmpwatch on the host
+  when: step|int == 2
+- block:
+  - block:
+    - include_role:
+        name: linux-system-roles.certificate
+      vars:
+        certificate_requests:
+        - ca: ipa
+          dns: '{{fqdn_internal_api}}'
+          key_size: '2048'
+          name: ovn_dbs
+          principal: ovn_dbs/{{fqdn_internal_api}}@{{idm_realm}}
+    name: Certificate generation
+    when: enable_internal_tls | bool
+  - name: set is_ovn_dbs_bootstrap_node fact
+    set_fact: is_ovn_dbs_bootstrap_node={{ovn_dbs_short_bootstrap_node_name|lower
+      == ansible_facts['hostname']|lower}}
+  - block:
+    - include_role:
+        name: tripleo_ovn_cluster
+      name: Configure OVN DBs and northd
+      vars:
+        tripleo_ovn_cluster_dbs_protocol: '{{ enable_internal_tls | ternary(''ssl'',
+          ''tcp'', ''tcp'') }}'
+        tripleo_ovn_cluster_nb_db_port: 6641
+        tripleo_ovn_cluster_nb_local_port: 6643
+        tripleo_ovn_cluster_nb_remote_port: 6643
+        tripleo_ovn_cluster_nb_ssl_ca_cert: /etc/ipa/ca.crt
+        tripleo_ovn_cluster_network: internal_api
+        tripleo_ovn_cluster_northd_ssl_ca_cert: /etc/ipa/ca.crt
+        tripleo_ovn_cluster_sb_db_port: 6642
+        tripleo_ovn_cluster_sb_local_port: 6644
+        tripleo_ovn_cluster_sb_remote_port: 6644
+        tripleo_ovn_cluster_sb_ssl_ca_cert: /etc/ipa/ca.crt
+  name: Prepare OVN cluster
+  when: step|int == 1
+- block:
+  - block:
+    - include_role:
+        name: tripleo_container_manage
+      loop:
+      - ovn_cluster_north_db_server
+      - ovn_cluster_south_db_server
+      - ovn_cluster_northd
+      loop_control:
+        loop_var: ovn_container
+      name: Start OVN container
+      vars:
+        tripleo_container_manage_config: /var/lib/tripleo-config/container-startup-config/step_0
+        tripleo_container_manage_config_id: '{{ ovn_container }}'
+        tripleo_container_manage_config_patterns: '{{ ovn_container }}.json'
+  - become: true
+    name: Set connection
+    shell: 'podman exec ovn_cluster_north_db_server bash -c "ovn-nbctl --no-leader-only
+      --inactivity-probe={{ tripleo_ovn_cluster_probe_interval }} set-connection p{{
+      tripleo_ovn_cluster_dbs_protocol }}:{{ tripleo_ovn_cluster_nb_db_port }}:{{
+      tripleo_ovn_cluster_dbs_addr }}"
+
+      podman exec ovn_cluster_south_db_server bash -c "ovn-sbctl --no-leader-only
+      --inactivity-probe={{ tripleo_ovn_cluster_probe_interval }} set-connection p{{
+      tripleo_ovn_cluster_dbs_protocol }}:{{ tripleo_ovn_cluster_sb_db_port }}:{{
+      tripleo_ovn_cluster_dbs_addr }}"
+
+      '
+    vars:
+      tripleo_ovn_cluster_dbs_addr: 0.0.0.0
+      tripleo_ovn_cluster_dbs_protocol: '{{ enable_internal_tls | ternary(''ssl'',
+        ''tcp'', ''tcp'') }}'
+      tripleo_ovn_cluster_nb_db_port: 6641
+      tripleo_ovn_cluster_network: internal_api
+      tripleo_ovn_cluster_probe_interval: 60000
+      tripleo_ovn_cluster_sb_db_port: 6642
+    when:
+    - is_ovn_dbs_bootstrap_node | bool
+  name: Start OVN DBs and northd containers (bootstrap node)
+  when:
+  - step|int == 3
+  - is_ovn_dbs_bootstrap_node | bool
+- block:
+  - block:
+    - include_role:
+        name: tripleo_container_manage
+      loop:
+      - ovn_cluster_north_db_server
+      - ovn_cluster_south_db_server
+      - ovn_cluster_northd
+      loop_control:
+        loop_var: ovn_container
+      name: Start OVN container
+      vars:
+        tripleo_container_manage_config: /var/lib/tripleo-config/container-startup-config/step_0
+        tripleo_container_manage_config_id: '{{ ovn_container }}'
+        tripleo_container_manage_config_patterns: '{{ ovn_container }}.json'
+  - become: true
+    name: Set connection
+    shell: 'podman exec ovn_cluster_north_db_server bash -c "ovn-nbctl --no-leader-only
+      --inactivity-probe={{ tripleo_ovn_cluster_probe_interval }} set-connection p{{
+      tripleo_ovn_cluster_dbs_protocol }}:{{ tripleo_ovn_cluster_nb_db_port }}:{{
+      tripleo_ovn_cluster_dbs_addr }}"
+
+      podman exec ovn_cluster_south_db_server bash -c "ovn-sbctl --no-leader-only
+      --inactivity-probe={{ tripleo_ovn_cluster_probe_interval }} set-connection p{{
+      tripleo_ovn_cluster_dbs_protocol }}:{{ tripleo_ovn_cluster_sb_db_port }}:{{
+      tripleo_ovn_cluster_dbs_addr }}"
+
+      '
+    vars:
+      tripleo_ovn_cluster_dbs_addr: 0.0.0.0
+      tripleo_ovn_cluster_dbs_protocol: '{{ enable_internal_tls | ternary(''ssl'',
+        ''tcp'', ''tcp'') }}'
+      tripleo_ovn_cluster_nb_db_port: 6641
+      tripleo_ovn_cluster_network: internal_api
+      tripleo_ovn_cluster_probe_interval: 60000
+      tripleo_ovn_cluster_sb_db_port: 6642
+    when:
+    - is_ovn_dbs_bootstrap_node | bool
+  name: Start OVN DBs and northd containers (non-bootstrap nodes)
+  when:
+  - step|int == 4
+  - not is_ovn_dbs_bootstrap_node | bool
+- block:
+  - include_role:
+      name: linux-system-roles.certificate
+    vars:
+      certificate_requests:
+      - ca: ipa
+        dns: '{{fqdn_internal_api}}'
+        key_size: '2048'
+        name: ovn_controller
+        principal: ovn_controller/{{fqdn_internal_api}}@{{idm_realm}}
+  name: Certificate generation
+  when:
+  - step|int == 1
+  - enable_internal_tls
+- block:
+  - include_role:
+      name: linux-system-roles.certificate
+    vars:
+      certificate_requests:
+      - ca: ipa
+        dns: '{{fqdn_internal_api}}'
+        key_size: '2048'
+        name: rabbitmq
+        principal: rabbitmq/{{fqdn_internal_api}}@{{idm_realm}}
+        run_after: "container_name=$({{container_cli}} ps --format=\\{\\{.Names\\\
+          }\\} | grep -w -E 'rabbitmq(-bundle-.*-[0-9]+)?')\nservice_crt=\"/etc/pki/tls/certs/rabbitmq.crt\"\
+          \nservice_key=\"/etc/pki/tls/private/rabbitmq.key\"\nif echo \"$container_name\"\
+          \ | grep -q \"^rabbitmq-bundle\"; then\n  # lp#1917868: Do not use podman\
+          \ cp with HA containers as they get\n  # frozen temporarily and that can\
+          \ make pacemaker operation fail.\n  tar -c \"$service_crt\" \"$service_key\"\
+          \ | {{container_cli}} exec -i \"$container_name\" tar -C / -xv\n  # no need\
+          \ to update the mount point, because pacemaker\n  # recreates the container\
+          \ when it's restarted\nelse\n  # Refresh the cert at the mount-point\n \
+          \ {{container_cli}} cp $service_crt \"$container_name:/var/lib/kolla/config_files/src-tls/$service_crt\"\
+          \n  # Refresh the key at the mount-point\n  {{container_cli}} cp $service_key\
+          \ \"$container_name:/var/lib/kolla/config_files/src-tls/$service_key\"\n\
+          \  # Copy the new cert from the mount-point to the real path\n  {{container_cli}}\
+          \ exec -u root \"$container_name\" cp \"/var/lib/kolla/config_files/src-tls$service_crt\"\
+          \ \"$service_crt\"\n  # Copy the new key from the mount-point to the real\
+          \ path\n  {{container_cli}} exec -u root \"$container_name\" cp \"/var/lib/kolla/config_files/src-tls$service_key\"\
+          \ \"$service_key\"\nfi\n# Set appropriate permissions\n{{container_cli}}\
+          \ exec -u root \"$container_name\" chown rabbitmq:rabbitmq \"$service_crt\"\
+          \n{{container_cli}} exec -u root \"$container_name\" chown rabbitmq:rabbitmq\
+          \ \"$service_key\"\n# Trigger a pem cache clear in RabbitMQ to read the\
+          \ new certificates\n{{container_cli}} exec \"$container_name\" rabbitmqctl\
+          \ eval \"ssl:clear_pem_cache().\"\n"
+  name: Certificate generation
+  when:
+  - step|int == 1
+  - enable_internal_tls
+- import_role:
+    name: tripleo_container_tag
+  name: RabbitMQ tag container image for pacemaker
+  vars:
+    container_image: registry.redhat.io/rhosp-rhel9/openstack-rabbitmq:17.1.6
+    container_image_latest: cluster.common.tag/rabbitmq:pcmklatest
+  when: step|int == 1
+- block:
+  - import_role:
+      name: tripleo_ha_wrapper
+    name: Rabbitmq rpc puppet bundle
+    vars:
+      tripleo_ha_wrapper_bundle_name: rabbitmq-bundle
+      tripleo_ha_wrapper_config_suffix: .previous_run
+      tripleo_ha_wrapper_puppet_config_volume: rabbitmq
+      tripleo_ha_wrapper_puppet_debug: false
+      tripleo_ha_wrapper_puppet_execute: '["Rabbitmq_policy", "Rabbitmq_user"].each
+        |String $val| { noop_resource($val) }; include ::tripleo::profile::base::pacemaker;
+        include ::tripleo::profile::pacemaker::rabbitmq_bundle'
+      tripleo_ha_wrapper_puppet_tags: pacemaker::resource::bundle,pacemaker::property,pacemaker::resource::ip,pacemaker::resource::ocf,pacemaker::constraint::order,pacemaker::constraint::colocation
+      tripleo_ha_wrapper_resource_name: rabbitmq
+      tripleo_ha_wrapper_resource_state: Started
+      tripleo_ha_wrapper_service_name: oslo_messaging_rpc
+  name: RabbitMQ RPC HA Wrappers Step
+  when: step|int == 2
+- block:
+  - become: true
+    containers.podman.podman_image:
+      force: true
+      name: '{{ prefetch_image }}'
+      validate_certs: false
+    delay: 5
+    loop: '{{ lookup(''template'', tripleo_role_name + ''/docker_config.yaml'', errors=''ignore'')
+      | default(''{}'', True) | from_yaml | recursive_get_key_from_dict(key=''image'')
+      | unique }}'
+    loop_control:
+      loop_var: prefetch_image
+    name: Pre-fetch all the containers
+    register: result
+    retries: 5
+    until: result is succeeded
+  when:
+  - (step|int) == 1
+- block:
+  - name: Check if rsyslog exists
+    register: swift_rsyslog_config
+    shell: systemctl is-active rsyslog
+  - copy:
+      content: '# Fix for https://bugs.launchpad.net/tripleo/+bug/1776180
+
+        local2.*                 /var/log/containers/swift/swift.log
+
+        &                        stop
+
+        '
+      dest: /etc/rsyslog.d/openstack-swift.conf
+    name: Forward logging to swift.log file
+    register: swift_logconfig
+    when:
+    - swift_rsyslog_config is defined
+    - swift_rsyslog_config.rc == 0
+  - name: Restart rsyslogd service after logging conf change
+    service:
+      name: rsyslog
+      state: restarted
+    when:
+    - swift_logconfig is defined
+    - swift_logconfig is changed
+  name: Configure rsyslog for swift
+  when:
+  - step|int == 1
+- become: true
+  failed_when:
+  - kolla_set_configs_result.rc is defined
+  - kolla_set_configs_result.rc not in [0, 125]
+  name: Run kolla_set_configs to copy ring files
+  register: kolla_set_configs_result
+  shell: '{{ container_cli }} exec -u root {{ item }} /usr/local/bin/kolla_set_configs '
+  when: step|int == 5
+  with_items:
+  - swift_proxy
+- become: true
+  failed_when:
+  - kolla_set_configs_result.rc is defined
+  - kolla_set_configs_result.rc not in [0, 125]
+  name: Run kolla_set_configs to copy ring files
+  register: kolla_set_configs_result
+  shell: '{{ container_cli }} exec -u root {{ item }} /usr/local/bin/kolla_set_configs'
+  when: step|int == 5
+  with_items:
+  - swift_account_auditor
+  - swift_account_reaper
+  - swift_account_replicator
+  - swift_account_server
+  - swift_container_auditor
+  - swift_container_replicator
+  - swift_container_server
+  - swift_container_updater
+  - swift_object_auditor
+  - swift_object_expirer
+  - swift_object_replicator
+  - swift_object_server
+  - swift_object_updater

@@ -1,0 +1,149 @@
+- become: true
+  block:
+  - changed_when: false
+    check_mode: false
+    command: openstack network agent list --column ID --column Host --column Binary
+      --format yaml
+    delegate_to: '{{ groups[''Undercloud''] | first }}'
+    name: Get neutron agents ID
+    register: neutron_agents_result
+  - check_mode: false
+    delegate_to: '{{ groups[''Undercloud''] | first }}'
+    name: Filter only current host
+    set_fact:
+      neutron_agents: '{{ neutron_agents_result.stdout | from_yaml | selectattr(''Host'',
+        ''match'', ansible_facts[''fqdn''] ~ ''.*'') | list }}'
+  - block:
+    - become: true
+      failed_when: ('msg' in stop_containers and 'Could not find the requested service'
+        not in stop_containers.msg) or ('rc' in stop_containers and stop_containers.rc
+        != 0)
+      loop:
+      - tripleo_ovn_controller
+      - tripleo_ovn_metadata_agent
+      name: Stop OVN containers
+      register: stop_containers
+      service:
+        enabled: false
+        name: '{{ item }}'
+        state: stopped
+    - check_mode: false
+      command: openstack network agent delete {{ agent.ID }}
+      delegate_to: '{{ groups[''Undercloud''] | first }}'
+      loop: '{{ neutron_agents }}'
+      loop_control:
+        label: '{{ agent.Host }}/{{ agent.Binary }}'
+        loop_var: agent
+      name: Delete neutron agents
+    name: Deleting OVN agents
+  environment:
+    OS_CLOUD: overcloud
+  tags: down
+  when:
+  - step|int == 1
+  - container_cli == 'podman'
+- become: true
+  block:
+  - command: crm_node -n
+    name: Getting Nova compute hostname
+    register: nova_compute_hostname
+  - fail:
+      msg: Cannot delegate pacemaker cleanup to the bootstrap node. Please delete
+        the resources manually.
+    ignore_errors: true
+    name: Check if pacemaker_short_bootstrap_node_name is a defined variable
+    when: pacemaker_short_bootstrap_node_name is not defined
+  - block:
+    - command: stonith_admin -l {{ nova_compute_hostname.stdout }}
+      delegate_to: '{{ pacemaker_short_bootstrap_node_name }}'
+      name: List STONITH resource for the Compute node
+      register: stonith_service_results
+    - command: pcs resource disable "{{ item }}"
+      delegate_to: '{{ pacemaker_short_bootstrap_node_name }}'
+      loop: '{{ stonith_service_results.stdout | regex_findall(''^(stonith-fence(?!_compute-fence-nova).*)'',
+        multiline=True)}}'
+      name: Disable the STONITH resources for the Compute node
+    - command: pcs resource delete "{{ item }}"
+      delegate_to: '{{ pacemaker_short_bootstrap_node_name }}'
+      loop: '{{ stonith_service_results.stdout | regex_findall(''^(stonith-fence(?!_compute-fence-nova).*)'',
+        multiline=True)}}'
+      name: Delete the STONITH resources for the Compute node
+    - command: pcs stonith level clear target {{ nova_compute_hostname.stdout }}
+      delegate_to: '{{ pacemaker_short_bootstrap_node_name }}'
+      name: Clear the stonith level hierarchy for the Compute node target
+    - command: pcs cluster node remove-remote {{ nova_compute_hostname.stdout }}
+      delegate_to: '{{ pacemaker_short_bootstrap_node_name }}'
+      name: Delete Compute node from cluster
+    - command: crm_resource --set-parameter=pcmk_host_list -r stonith-fence_compute-fence-nova
+        -v "{{ pacemaker_remote_short_node_names | reject('search', nova_compute_hostname.stdout)
+        | join(',') }}"
+      delegate_to: '{{ pacemaker_short_bootstrap_node_name }}'
+      name: Remove compute node in pcmk_host_list parameter from stonith-fence_compute-fence-nova
+    name: Clean up Pacemaker remote and STONITH resources for Compute node
+    when:
+    - nova_compute_hostname.stdout in compute_instanceha_short_node_names
+    - pacemaker_short_bootstrap_node_name is defined
+  tags: down
+  when:
+  - step|int == 1
+  - container_cli == 'podman'
+  - '"pacemaker_remote" in enabled_services|list'
+  - inventory_hostname_short in compute_instanceha_short_node_names
+- become: true
+  block:
+  - changed_when: false
+    check_mode: false
+    command: openstack compute service list --service nova-compute --column ID --column
+      Host --format yaml
+    delegate_to: '{{ groups[''Undercloud''] | first }}'
+    name: Get nova-compute service ID
+    register: nova_compute_service_result
+  - name: is additional Cell?
+    set_fact:
+      is_additional_cell: false
+  - check_mode: false
+    delegate_to: '{{ groups[''Undercloud''] | first }}'
+    name: Set fact for nova_compute services
+    set_fact:
+      nova_compute_service: '{{ nova_compute_service_result.stdout | from_yaml | selectattr(''Host'',
+        ''match'', ansible_facts[''fqdn''] ~ ''.*'') | list }}'
+  - fail:
+      msg: Found multiple `{{ ansible_facts['fqdn'] }}`, which is unexpected. This
+        means that the FQDN of the selected device to disable is either wrong or is
+        sharing a name with another host, which is also wrong. Please correct this
+        issue before continuing. Nova service list return data can be found here ->
+        {{ nova_compute_service }}.
+    name: Check search output
+    when:
+    - (nova_compute_service | length) > 1
+  - block:
+    - check_mode: false
+      command: openstack compute service set {{ nova_compute_service[0].Host }} nova-compute
+        --disable
+      delegate_to: '{{ groups[''Undercloud''] | first }}'
+      name: Disable nova-compute service
+      when:
+      - not is_additional_cell|bool
+    - become: true
+      failed_when: ('msg' in stop_nova_compute and 'Could not find the requested service
+        tripleo_nova_compute' not in stop_nova_compute.msg) or ('rc' in stop_nova_compute
+        and stop_nova_compute.rc != 0)
+      name: Stop nova-compute container
+      register: stop_nova_compute
+      service:
+        enabled: false
+        name: tripleo_nova_compute
+        state: stopped
+    - check_mode: false
+      command: openstack compute service delete {{ nova_compute_service[0].ID }}
+      delegate_to: '{{ groups[''Undercloud''] | first }}'
+      name: Delete nova-compute service
+    name: Disable nova services
+    when:
+    - (nova_compute_service | length) == 1
+  environment:
+    OS_CLOUD: overcloud
+  tags: down
+  when:
+  - step|int == 1
+  - container_cli == 'podman'

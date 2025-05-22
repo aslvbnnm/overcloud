@@ -1,0 +1,143 @@
+# DeployedNetworkEnvironment parameter value generated from the networks data
+# file. Can be used instead of provisioning networks to deploy without Neutron.
+
+resource_registry:
+  OS::TripleO::Network: ../network/deployed_networks.yaml
+  OS::TripleO::DeployedServer::ControlPlanePort: ../deployed-server/deployed-neutron-port.yaml
+
+  # Role ports
+  OS::TripleO::Controller::Ports::ExternalPort: ../network/ports/deployed_external.yaml
+  OS::TripleO::Controller::Ports::InternalApiPort: ../network/ports/deployed_internal_api.yaml
+  OS::TripleO::Controller::Ports::StoragePort: ../network/ports/deployed_storage.yaml
+  OS::TripleO::Controller::Ports::StorageMgmtPort: ../network/ports/deployed_storage_mgmt.yaml
+  OS::TripleO::Controller::Ports::TenantPort: ../network/ports/deployed_tenant.yaml
+  OS::TripleO::ComputeHCI::Ports::InternalApiPort: ../network/ports/deployed_internal_api.yaml
+  OS::TripleO::ComputeHCI::Ports::StoragePort: ../network/ports/deployed_storage.yaml
+  OS::TripleO::ComputeHCI::Ports::StorageMgmtPort: ../network/ports/deployed_storage_mgmt.yaml
+  OS::TripleO::ComputeHCI::Ports::TenantPort: ../network/ports/deployed_tenant.yaml
+
+  # VIP ports
+  OS::TripleO::Network::Ports::ControlPlaneVipPort: ../network/ports/deployed_vip_ctlplane.yaml
+  OS::TripleO::Network::Ports::ExternalVipPort: ../network/ports/deployed_vip_external.yaml
+  OS::TripleO::Network::Ports::InternalApiVipPort: ../network/ports/deployed_vip_internal_api.yaml
+  OS::TripleO::Network::Ports::StorageVipPort: ../network/ports/deployed_vip_storage.yaml
+  OS::TripleO::Network::Ports::StorageMgmtVipPort: ../network/ports/deployed_vip_storage_mgmt.yaml
+
+parameter_defaults:
+
+  DeployedNetworkEnvironment:
+    net_attributes_map:
+      external:
+        network:
+          dns_domain: external.localdomain.
+          mtu: 1500
+          name: external
+          tags:
+          - tripleo_network_name=External
+          - tripleo_net_idx=0
+          - tripleo_vip=True
+        subnets:
+          external_subnet:
+            cidr: 192.168.131.0/25
+            gateway_ip: 192.168.131.1
+            host_routes: []
+            ip_version: 4
+            dns_nameservers: []
+            name: external_subnet
+            tags:
+              []
+      internal_api:
+        network:
+          dns_domain: internal_api.localdomain.
+          mtu: 1400
+          name: internal_api
+          tags:
+          - tripleo_network_name=InternalApi
+          - tripleo_net_idx=1
+          - tripleo_vip=True
+        subnets:
+          internal_api_subnet:
+            cidr: 172.16.2.0/24
+            gateway_ip: 
+            host_routes: []
+            ip_version: 4
+            dns_nameservers: []
+            name: internal_api_subnet
+            tags:
+              - tripleo_vlan_id=3802
+      storage:
+        network:
+          dns_domain: storage.localdomain.
+          mtu: 1400
+          name: storage
+          tags:
+          - tripleo_network_name=Storage
+          - tripleo_net_idx=2
+          - tripleo_vip=True
+        subnets:
+          storage_subnet:
+            cidr: 172.16.4.0/24
+            gateway_ip: 
+            host_routes: []
+            ip_version: 4
+            dns_nameservers: []
+            name: storage_subnet
+            tags:
+              - tripleo_vlan_id=3804
+      storage_mgmt:
+        network:
+          dns_domain: storage_mgmt.localdomain.
+          mtu: 1400
+          name: storage_mgmt
+          tags:
+          - tripleo_network_name=StorageMgmt
+          - tripleo_net_idx=3
+          - tripleo_vip=True
+        subnets:
+          storage_mgmt_subnet:
+            cidr: 172.16.5.0/24
+            gateway_ip: 
+            host_routes: []
+            ip_version: 4
+            dns_nameservers: []
+            name: storage_mgmt_subnet
+            tags:
+              - tripleo_vlan_id=3805
+      tenant:
+        network:
+          dns_domain: tenant.localdomain.
+          mtu: 1400
+          name: tenant
+          tags:
+          - tripleo_network_name=Tenant
+          - tripleo_net_idx=4
+          - tripleo_vip=False
+        subnets:
+          tenant_subnet:
+            cidr: 172.16.3.0/24
+            gateway_ip: 
+            host_routes: []
+            ip_version: 4
+            dns_nameservers: []
+            name: tenant_subnet
+            tags:
+              - tripleo_vlan_id=3803
+
+    net_cidr_map:
+      external:
+      - 192.168.131.0/25
+      internal_api:
+      - 172.16.2.0/24
+      storage:
+      - 172.16.4.0/24
+      storage_mgmt:
+      - 172.16.5.0/24
+      tenant:
+      - 172.16.3.0/24
+
+    net_ip_version_map:
+      external: 4
+      internal_api: 4
+      storage: 4
+      storage_mgmt: 4
+      tenant: 4

@@ -1,0 +1,371 @@
+- block:
+  - become: true
+    command: '{{ container_cli }} exec cinder_api cinder-manage db online_data_migrations'
+    delegate_to: '{{ (groups[''cinder_api''] | difference(groups[''excluded_overcloud'']))[0]
+      }}'
+    name: Online data migration for Cinder
+    tags:
+    - online_upgrade
+    - online_upgrade_cinder
+  when: step|int == 1
+- block:
+  - block:
+    - become: true
+      name: Get cinder_volume image from pacemaker
+      register: xmllint_pcmk_cinder_volume_image
+      shell: xmllint --xpath "string(//bundle[@id='openstack-cinder-volume']/podman/@image)"
+        /var/lib/pacemaker/cib/cib.xml
+    - name: Get container cinder_volume image
+      set_fact:
+        cinder_volume_image: registry.redhat.io/rhosp-rhel9/openstack-cinder-volume:17.1.6
+        cinder_volume_image_latest: cluster.common.tag/cinder-volume:pcmklatest
+        pcmk_cinder_volume_image: '{{xmllint_pcmk_cinder_volume_image.stdout}}'
+    delegate_to: '{{ (groups["cinder_volume"] | difference(groups["excluded_overcloud"]))[0]
+      }}'
+  - become: true
+    import_role:
+      name: tripleo_ha_image_update
+    name: cinder-volume temporary pacemaker container tag in case of image switch
+    vars:
+      tripleo_ha_image_update_bundle: openstack-cinder-volume
+      tripleo_ha_image_update_new_image: '{{cinder_volume_image_latest}}'
+      tripleo_ha_image_update_node_names: '{{ groups["cinder_volume"] | difference(groups["excluded_overcloud"])
+        }}'
+      tripleo_ha_image_update_old_image: '{{pcmk_cinder_volume_image}}'
+    when:
+    - (pcmk_cinder_volume_image != "")
+    - (pcmk_cinder_volume_image != cinder_volume_image_latest)
+  tags: ha_image_update
+  when: step|int == 1
+- block:
+  - block:
+    - become: true
+      name: Get haproxy image from pacemaker
+      register: xmllint_pcmk_haproxy_image
+      shell: xmllint --xpath "string(//bundle[@id='haproxy-bundle']/podman/@image)"
+        /var/lib/pacemaker/cib/cib.xml
+    - name: Get container haproxy image
+      set_fact:
+        haproxy_image: registry.redhat.io/rhosp-rhel9/openstack-haproxy:17.1.6
+        haproxy_image_latest: cluster.common.tag/haproxy:pcmklatest
+        pcmk_haproxy_image: '{{xmllint_pcmk_haproxy_image.stdout}}'
+    delegate_to: '{{ (groups["haproxy"] | difference(groups["excluded_overcloud"]))[0]
+      }}'
+  - become: true
+    import_role:
+      name: tripleo_ha_image_update
+    name: haproxy temporary pacemaker container tag in case of image switch
+    vars:
+      tripleo_ha_image_update_bundle: haproxy-bundle
+      tripleo_ha_image_update_new_image: '{{haproxy_image_latest}}'
+      tripleo_ha_image_update_node_names: '{{ groups["haproxy"] | difference(groups["excluded_overcloud"])
+        }}'
+      tripleo_ha_image_update_old_image: '{{pcmk_haproxy_image}}'
+    when:
+    - (pcmk_haproxy_image != "")
+    - (pcmk_haproxy_image != haproxy_image_latest)
+  tags: ha_image_update
+  when: step|int == 1
+- block:
+  - block:
+    - become: true
+      name: Get galera image from pacemaker
+      register: xmllint_pcmk_galera_image
+      shell: xmllint --xpath "string(//bundle[@id='galera-bundle']/podman/@image)"
+        /var/lib/pacemaker/cib/cib.xml
+    - name: Get container galera image
+      set_fact:
+        galera_image: registry.redhat.io/rhosp-rhel9/openstack-mariadb:17.1.6
+        galera_image_latest: cluster.common.tag/mariadb:pcmklatest
+        pcmk_galera_image: '{{xmllint_pcmk_galera_image.stdout}}'
+    delegate_to: '{{ (groups["mysql"] | difference(groups["excluded_overcloud"]))[0]
+      }}'
+  - become: true
+    import_role:
+      name: tripleo_ha_image_update
+    name: MySQL temporary pacemaker container tag in case of image switch
+    vars:
+      tripleo_ha_image_update_bundle: galera-bundle
+      tripleo_ha_image_update_new_image: '{{galera_image_latest}}'
+      tripleo_ha_image_update_node_names: '{{ groups["mysql"] | difference(groups["excluded_overcloud"])
+        }}'
+      tripleo_ha_image_update_old_image: '{{pcmk_galera_image}}'
+    when:
+    - (pcmk_galera_image != "")
+    - (pcmk_galera_image != galera_image_latest)
+  tags: ha_image_update
+  when: step|int == 1
+- block:
+  - become: true
+    command: '{{ container_cli }} exec nova_conductor nova-manage db online_data_migrations'
+    delegate_to: '{{ (groups[''nova_conductor''] | difference(groups[''excluded_overcloud'']))[0]
+      }}'
+    name: Online data migration for Nova
+    tags:
+    - online_upgrade
+    - online_upgrade_nova
+  when: step|int == 1
+- block:
+  - become: true
+    delegate_to: '{{ item }}'
+    loop: '{{groups[''ovn_dbs''] | difference(groups[''excluded_overcloud'']) }}'
+    name: Get OVN_Northbound cluster leader
+    register: ovn_nb_dbs_cluster_leader
+    shell: 'podman exec -u root ovn_cluster_north_db_server ovs-appctl -t /var/run/ovn/ovnnb_db.ctl
+      cluster/status OVN_Northbound | grep ''Leader: self'' || echo "NOT_LEADER"
+
+      '
+  - set_fact:
+      ovn_nb_leader: '{{ ovn_nb_dbs_cluster_leader| json_query("results[?stdout!=''NOT_LEADER''].item")
+        }}'
+  - become: true
+    delegate_to: '{{ ovn_nb_leader[0] }}'
+    name: Start OVN NB leader container
+    tripleo_container_manage:
+      config_dir: /var/lib/tripleo-config/container-startup-config/step_0
+      config_id:
+      - ovn_cluster_north_db_server
+      config_overrides:
+        .*ovn_cluster_north_db_server:
+          image: registry.redhat.io/rhosp-rhel9/openstack-ovn-nb-db-server:17.1.6
+          name: ovn_cluster_north_db_server
+      config_patterns: '*ovn_cluster_north_db_server.json'
+  - become: true
+    delegate_to: '{{ item }}'
+    loop: '{{groups[''ovn_dbs''] | difference(groups[''excluded_overcloud'']) }}'
+    name: Get OVN_Southbound cluster leader
+    register: ovn_sb_dbs_cluster_leader
+    shell: 'sudo podman exec -u root ovn_cluster_south_db_server ovs-appctl -t /var/run/ovn/ovnsb_db.ctl
+      cluster/status OVN_Southbound | grep ''Leader: self'' || echo "NOT_LEADER"
+
+      '
+  - set_fact:
+      ovn_sb_leader: '{{ ovn_sb_dbs_cluster_leader | json_query("results[?stdout!=''NOT_LEADER''].item")
+        }}'
+  - become: true
+    delegate_to: '{{ ovn_sb_leader[0] }}'
+    name: Start OVN SB leader container
+    tripleo_container_manage:
+      config_dir: /var/lib/tripleo-config/container-startup-config/step_0
+      config_id:
+      - ovn_cluster_south_db_server
+      config_overrides:
+        .*ovn_cluster_south_db_server:
+          image: registry.redhat.io/rhosp-rhel9/openstack-ovn-sb-db-server:17.1.6
+          name: ovn_cluster_south_db_server
+      config_patterns: '*ovn_cluster_south_db_server.json'
+  - become: true
+    delegate_to: '{{ item }}'
+    loop: '{{groups[''ovn_dbs''] | difference(groups[''excluded_overcloud'']) | difference(ovn_nb_leader[0])}}'
+    name: Start OVN NB containers (non-leader nodes)
+    tripleo_container_manage:
+      config_dir: /var/lib/tripleo-config/container-startup-config/step_0
+      config_id:
+      - ovn_cluster_north_db_server
+      config_overrides:
+        .*ovn_cluster_north_db_server:
+          image: registry.redhat.io/rhosp-rhel9/openstack-ovn-nb-db-server:17.1.6
+          name: ovn_cluster_north_db_server
+      config_patterns: '*ovn_cluster_north_db_server.json'
+  - become: true
+    delegate_to: '{{ item }}'
+    loop: '{{groups[''ovn_dbs''] | difference(groups[''excluded_overcloud'']) | difference(ovn_sb_leader[0])}}'
+    name: Start OVN SB containers (non-leader nodes)
+    tripleo_container_manage:
+      config_dir: /var/lib/tripleo-config/container-startup-config/step_0
+      config_id:
+      - ovn_cluster_south_db_server
+      config_overrides:
+        .*ovn_cluster_south_db_server:
+          image: registry.redhat.io/rhosp-rhel9/openstack-ovn-sb-db-server:17.1.6
+          name: ovn_cluster_south_db_server
+      config_patterns: '*ovn_cluster_south_db_server.json'
+  - become: true
+    delegate_to: '{{ item }}'
+    loop: '{{groups[''ovn_dbs''] | difference(groups[''excluded_overcloud''])}}'
+    name: Start OVN northd container
+    tripleo_container_manage:
+      config_dir: /var/lib/tripleo-config/container-startup-config/step_0
+      config_id:
+      - ovn_cluster_northd
+      config_overrides:
+        .*ovn_cluster_northd:
+          image: registry.redhat.io/rhosp-rhel9/openstack-ovn-northd:17.1.6
+          name: ovn_cluster_northd
+      config_patterns: '*ovn_cluster_northd.json'
+  name: Run ovndbs update
+  tags:
+  - ovn
+  - ovn_image
+  when: step|int == 2
+- async: 600
+  become: true
+  containers.podman.podman_image:
+    force: true
+    name: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+    validate_certs: false
+  delegate_to: '{{ item }}'
+  loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+    }}'
+  name: Force pull image in case image name doesn't change.
+  poll: 0
+  register: ovn_controller_image_update
+  tags:
+  - ovn
+  - ovn_image
+  when: step|int == 1
+- async_status:
+    jid: '{{ async_result_item.ansible_job_id }}'
+  become: true
+  delay: 1
+  delegate_to: '{{ async_result_item.item }}'
+  loop: '{{ovn_controller_image_update.results }}'
+  loop_control:
+    loop_var: async_result_item
+  name: Was the ovn_controller image pull successful.
+  register: async_poll_results
+  retries: 600
+  tags:
+  - ovn
+  - ovn_image
+  until: async_poll_results.finished
+  when:
+  - step|int == 1
+  - '''results'' in ovn_controller_image_update'
+- debug:
+    msg: ovn container will be using {{ image }}
+  name: OVN Container image used
+  tags: ovn
+  vars:
+    image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+  when: step|int == 1
+- async: 600
+  become: true
+  delegate_to: '{{ item }}'
+  loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+    }}'
+  name: Update OVN OVS related parameters before update.
+  poll: 0
+  register: ovs_vsctl
+  shell: 'set -e
+
+    ovs-vsctl set Open_vSwitch . external_ids:ovn-ofctrl-wait-before-clear={{ timeout
+    }}
+
+    ovs-vsctl set Open_vSwitch . external_ids:ovn-monitor-all=true
+
+    ovs-vsctl set Open_vSwitch . external_ids:ovn-match-northd-version=false
+
+    '
+  tags:
+  - ovn
+  vars:
+    timeout: 8000
+  when:
+  - step|int == 1
+- async_status:
+    jid: '{{ async_result_item.ansible_job_id }}'
+  become: true
+  delay: 1
+  delegate_to: '{{ async_result_item.item }}'
+  loop: '{{ovs_vsctl.results }}'
+  loop_control:
+    loop_var: async_result_item
+  name: Was the update of OVN OVS related parameter successful.
+  register: async_poll_results
+  retries: 600
+  tags:
+  - ovn
+  until: async_poll_results.finished
+  when:
+  - step|int == 1
+  - '''results'' in ovs_vsctl'
+- set_fact:
+    any_ovn_host: '{{groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+      | first }}'
+  tags: ovn
+  when: step|int == 1
+- become: true
+  delegate_to: '{{ any_ovn_host }}'
+  find:
+    paths: /var/lib/tripleo-config/container-startup-config/
+    patterns: '*ovn_controller.json'
+    recurse: true
+  name: Find ovn_controller configs in container-startup-configs
+  register: ovn_cont_17_0
+  tags:
+  - ovn
+  when: (step|int == 1) and (any_ovn_host is defined) and (any_ovn_host|length > 0)
+- name: get directory path from the ovn_cont_17_0
+  set_fact:
+    ovn_config_path: '{{ ovn_cont_17_0.files.0.path | dirname }}'
+  tags: ovn
+  when: step|int == 1
+- async: 600
+  become: true
+  delegate_to: '{{ item }}'
+  loop: '{{ groups[''ovn_controller''] | difference(groups[''excluded_overcloud''])
+    }}'
+  name: Update ovn_controller.
+  poll: 0
+  register: ovn_controller_update
+  tags: ovn
+  tripleo_container_manage:
+    config_dir: '{{ ovn_config_path }}'
+    config_id:
+    - tripleo_step{{config_step}}
+    config_overrides:
+      .*ovn_controller:
+        image: registry.redhat.io/rhosp-rhel9/openstack-ovn-controller:17.1.6
+        name: ovn_controller
+    config_patterns: '*ovn_controller.json'
+    debug: '{{ enable_debug | bool }}'
+    log_base_path: '{{ container_log_stdout_path }}'
+  vars:
+    config_step: '{{ (''step_4'' in ovn_config_path) | ternary(''4'', ''3'')}}'
+  when: step|int == 1
+- async_status:
+    jid: '{{ async_result_item.ansible_job_id }}'
+  become: true
+  delay: 1
+  delegate_to: '{{ async_result_item.item }}'
+  loop: '{{ovn_controller_update.results }}'
+  loop_control:
+    loop_var: async_result_item
+  name: Was the ovn_controller successful.
+  register: async_poll_results
+  retries: 600
+  tags: ovn
+  until: async_poll_results.finished
+  when:
+  - step|int == 1
+  - '''results'' in ovn_controller_update'
+- block:
+  - block:
+    - become: true
+      name: Get rabbitmq image from pacemaker
+      register: xmllint_pcmk_rabbitmq_image
+      shell: xmllint --xpath "string(//bundle[@id='rabbitmq-bundle']/podman/@image)"
+        /var/lib/pacemaker/cib/cib.xml
+    - name: Get container rabbitmq image
+      set_fact:
+        pcmk_rabbitmq_image: '{{xmllint_pcmk_rabbitmq_image.stdout}}'
+        rabbitmq_image: registry.redhat.io/rhosp-rhel9/openstack-rabbitmq:17.1.6
+        rabbitmq_image_latest: cluster.common.tag/rabbitmq:pcmklatest
+    delegate_to: '{{ (groups["oslo_messaging_rpc"] | difference(groups["excluded_overcloud"]))[0]
+      }}'
+  - become: true
+    import_role:
+      name: tripleo_ha_image_update
+    name: rabbitmq temporary pacemaker container tag in case of image switch
+    vars:
+      tripleo_ha_image_update_bundle: rabbitmq-bundle
+      tripleo_ha_image_update_new_image: '{{rabbitmq_image_latest}}'
+      tripleo_ha_image_update_node_names: '{{ groups["oslo_messaging_rpc"] | difference(groups["excluded_overcloud"])
+        }}'
+      tripleo_ha_image_update_old_image: '{{pcmk_rabbitmq_image}}'
+    when:
+    - (pcmk_rabbitmq_image != "")
+    - (pcmk_rabbitmq_image != rabbitmq_image_latest)
+  tags: ha_image_update
+  when: step|int == 1

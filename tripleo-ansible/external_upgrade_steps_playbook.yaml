@@ -1,0 +1,230 @@
+- import_playbook: common_deploy_steps_playbooks.yaml
+  vars:
+    deploy_source_host: "Undercloud"
+    deploy_target_host: "overcloud"
+- hosts: Undercloud
+  strategy: tripleo_free
+  name: External upgrade step 0
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    # Explicit ansible_python_interpreter to allow connecting
+    # to different OS releases (EL7/8) while using delegate_to.
+    ansible_python_interpreter: /usr/libexec/platform-python
+    step: '0'
+    bootstrap_server_id: 2c50483f-0cb6-4c45-95ce-59c5e573d3d0
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - import_tasks: external_upgrade_steps_tasks.yaml
+  tags:
+    - step0
+    - external
+    - external_upgrade_steps
+- hosts: Undercloud
+  strategy: tripleo_free
+  name: External upgrade step 1
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    # Explicit ansible_python_interpreter to allow connecting
+    # to different OS releases (EL7/8) while using delegate_to.
+    ansible_python_interpreter: /usr/libexec/platform-python
+    step: '1'
+    bootstrap_server_id: 2c50483f-0cb6-4c45-95ce-59c5e573d3d0
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - import_tasks: external_upgrade_steps_tasks.yaml
+  tags:
+    - step1
+    - external
+    - external_upgrade_steps
+- hosts: Undercloud
+  strategy: tripleo_free
+  name: External upgrade step 2
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    # Explicit ansible_python_interpreter to allow connecting
+    # to different OS releases (EL7/8) while using delegate_to.
+    ansible_python_interpreter: /usr/libexec/platform-python
+    step: '2'
+    bootstrap_server_id: 2c50483f-0cb6-4c45-95ce-59c5e573d3d0
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - import_tasks: external_upgrade_steps_tasks.yaml
+  tags:
+    - step2
+    - external
+    - external_upgrade_steps
+# putting both upgrade and deploy tasks in the same
+# playbook allows influencing the deploy tasks by
+# variables "exported" from upgrade tasks
+- hosts: Undercloud
+  name: External deploy step 1
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    # Explicit ansible_python_interpreter to allow connecting
+    # to different OS releases (EL7/8) while using delegate_to.
+    ansible_python_interpreter: /usr/libexec/platform-python
+    step: '1'
+    bootstrap_server_id: 2c50483f-0cb6-4c45-95ce-59c5e573d3d0
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - import_tasks: external_deploy_steps_tasks.yaml
+  tags:
+    - step1
+    - external
+    - external_deploy_steps
+# putting both upgrade and deploy tasks in the same
+# playbook allows influencing the deploy tasks by
+# variables "exported" from upgrade tasks
+- hosts: Undercloud
+  name: External deploy step 2
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    # Explicit ansible_python_interpreter to allow connecting
+    # to different OS releases (EL7/8) while using delegate_to.
+    ansible_python_interpreter: /usr/libexec/platform-python
+    step: '2'
+    bootstrap_server_id: 2c50483f-0cb6-4c45-95ce-59c5e573d3d0
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - import_tasks: external_deploy_steps_tasks.yaml
+  tags:
+    - step2
+    - external
+    - external_deploy_steps
+# putting both upgrade and deploy tasks in the same
+# playbook allows influencing the deploy tasks by
+# variables "exported" from upgrade tasks
+- hosts: Undercloud
+  name: External deploy step 3
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    # Explicit ansible_python_interpreter to allow connecting
+    # to different OS releases (EL7/8) while using delegate_to.
+    ansible_python_interpreter: /usr/libexec/platform-python
+    step: '3'
+    bootstrap_server_id: 2c50483f-0cb6-4c45-95ce-59c5e573d3d0
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - import_tasks: external_deploy_steps_tasks.yaml
+  tags:
+    - step3
+    - external
+    - external_deploy_steps
+# putting both upgrade and deploy tasks in the same
+# playbook allows influencing the deploy tasks by
+# variables "exported" from upgrade tasks
+- hosts: Undercloud
+  name: External deploy step 4
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    # Explicit ansible_python_interpreter to allow connecting
+    # to different OS releases (EL7/8) while using delegate_to.
+    ansible_python_interpreter: /usr/libexec/platform-python
+    step: '4'
+    bootstrap_server_id: 2c50483f-0cb6-4c45-95ce-59c5e573d3d0
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - import_tasks: external_deploy_steps_tasks.yaml
+  tags:
+    - step4
+    - external
+    - external_deploy_steps
+# putting both upgrade and deploy tasks in the same
+# playbook allows influencing the deploy tasks by
+# variables "exported" from upgrade tasks
+- hosts: Undercloud
+  name: External deploy step 5
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    # Explicit ansible_python_interpreter to allow connecting
+    # to different OS releases (EL7/8) while using delegate_to.
+    ansible_python_interpreter: /usr/libexec/platform-python
+    step: '5'
+    bootstrap_server_id: 2c50483f-0cb6-4c45-95ce-59c5e573d3d0
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - import_tasks: external_deploy_steps_tasks.yaml
+  tags:
+    - step5
+    - external
+    - external_deploy_steps

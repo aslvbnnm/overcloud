@@ -1,0 +1,28 @@
+- hosts: Undercloud
+  strategy: tripleo_linear
+  name: External deployment Post Deploy tasks
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  become: false
+  vars:
+    bootstrap_server_id: 2c50483f-0cb6-4c45-95ce-59c5e573d3d0
+    deploy_identifier: OSP_DIRECTOR_OPERATOR_DEPLOY_IDENTIFIER
+    enable_debug: False
+    enable_puppet: True
+    container_cli: podman
+    container_log_stdout_path: /var/log/containers/stdouts
+    container_healthcheck_disabled: False
+    docker_puppet_debug: False
+    docker_puppet_process_count: 6
+    docker_puppet_mount_host_puppet: True
+  tasks:
+    - name: External deployment Post Deploy tasks
+      delegate_to: localhost
+      run_once: true
+      debug:
+        msg: Use --start-at-task 'External deployment Post Deploy tasks' to resume from this task
+    - import_tasks: external_post_deploy_steps_tasks.yaml
+  tags:
+    - external
+    - external_deploy_steps
+    - external_post_deploy_steps

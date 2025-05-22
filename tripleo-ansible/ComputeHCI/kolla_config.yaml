@@ -1,0 +1,181 @@
+/var/lib/kolla/config_files/iscsid.json:
+  command: /usr/sbin/iscsid -f
+  config_files:
+  - dest: /etc/iscsi/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-iscsid/
+/var/lib/kolla/config_files/logrotate-crond.json:
+  command: /usr/sbin/crond -s -n
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+/var/lib/kolla/config_files/nova-migration-target.json:
+  command: dumb-init --single-child -- /usr/sbin/sshd -D -p 2022
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ssh/
+    owner: root
+    perm: '0600'
+    source: /host-ssh/ssh_host_*_key
+/var/lib/kolla/config_files/nova_compute.json:
+  command: '/var/lib/nova/delay-nova-compute --delay 180 --nova-binary /usr/bin/nova-compute '
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/iscsi/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-iscsid/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: nova:nova
+    path: /var/log/nova
+    recurse: true
+  - owner: nova:nova
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/nova_compute_wait_for_compute_service.json:
+  command: /container-config-scripts/pyshim.sh /container-config-scripts/nova_wait_for_compute_service.py
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: nova:nova
+    path: /var/log/nova
+    recurse: true
+/var/lib/kolla/config_files/nova_virtlogd.json:
+  command: /usr/local/bin/virtlogd_wrapper
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: nova:nova
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/nova_virtnodedevd.json:
+  command: /usr/sbin/virtnodedevd --config /etc/libvirt/virtnodedevd.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: nova:nova
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/nova_virtproxyd.json:
+  command: /usr/sbin/virtproxyd --config /etc/libvirt/virtproxyd.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: nova:nova
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/nova_virtqemud.json:
+  command: /usr/sbin/virtqemud --config /etc/libvirt/virtqemud.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: nova:nova
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/nova_virtsecretd.json:
+  command: /usr/sbin/virtsecretd --config /etc/libvirt/virtsecretd.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: nova:nova
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/nova_virtstoraged.json:
+  command: /usr/sbin/virtstoraged --config /etc/libvirt/virtstoraged.conf
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  - dest: /etc/ceph/
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src-ceph/
+  permissions:
+  - owner: nova:nova
+    path: /etc/ceph/ceph.client.openstack.keyring
+    perm: '0600'
+/var/lib/kolla/config_files/ovn_controller.json:
+  command: '/usr/bin/ovn-controller --pidfile --log-file unix:/run/openvswitch/db.sock '
+  permissions:
+  - owner: root:root
+    path: /var/log/openvswitch
+    recurse: true
+  - owner: root:root
+    path: /var/log/ovn
+    recurse: true
+/var/lib/kolla/config_files/ovn_metadata_agent.json:
+  command: /usr/bin/networking-ovn-metadata-agent --config-file /etc/neutron/neutron.conf
+    --config-file /etc/neutron/plugins/networking-ovn/networking-ovn-metadata-agent.ini
+    --log-file=/var/log/neutron/ovn-metadata-agent.log
+  config_files:
+  - dest: /
+    merge: true
+    preserve_properties: true
+    source: /var/lib/kolla/config_files/src/*
+  permissions:
+  - owner: neutron:neutron
+    path: /var/log/neutron
+    recurse: true
+  - owner: neutron:neutron
+    path: /var/lib/neutron
+    recurse: true
+  - optional: true
+    owner: neutron:neutron
+    path: /etc/pki/tls/certs/ovn_metadata.crt
+    perm: '0644'
+  - optional: true
+    owner: neutron:neutron
+    path: /etc/pki/tls/private/ovn_metadata.key
+    perm: '0644'

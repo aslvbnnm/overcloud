@@ -1,0 +1,26 @@
+- hosts: overcloud
+  strategy: tripleo_linear
+  name: Manage SELinux
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  tasks:
+    - name: Set selinux state
+      become: true
+      selinux:
+        policy: targeted
+        state: permissive
+
+- hosts: all
+  strategy: tripleo_linear
+  name: Generate /etc/hosts
+  gather_facts: "{{ gather_facts | default(false) }}"
+  any_errors_fatal: yes
+  tasks:
+
+    - name: Configure Hosts Entries
+      include_role:
+        name: tripleo_hosts_entries
+      vars:
+        tripleo_hosts_entries_undercloud_hosts_entries: "{{ undercloud_hosts_entries }}"
+        tripleo_hosts_entries_extra_hosts_entries: "{{ extra_hosts_entries }}"
+        tripleo_hosts_entries_vip_hosts_entries: "{{ vip_hosts_entries }}"

@@ -1,0 +1,36 @@
+- name: Check for existing yum.pid
+  register: yum_pid_file
+  stat: path=/run/yum.pid
+  when: step|int == 0 or step|int == 3
+- fail: msg="ERROR existing yum.pid detected - can't continue! Please ensure there
+    is no other package update process for the duration of the minor update worfklow.
+    Exiting."
+  name: Exit if existing yum process
+  when: (step|int == 0 or step|int == 3) and yum_pid_file.stat.exists
+- block:
+  - name: Update all packages
+    yum:
+      exclude: ansible-core
+      name: '*'
+      state: latest
+  - command: grub2-mkconfig -o /boot/grub2/grub.cfg
+    name: Generate grub config
+  - name: Find and replace grub.cfg
+    shell: 'set -o pipefail
+
+      find /boot/efi/EFI/ -name ''grub.cfg'' | xargs -i grub2-mkconfig -o {}
+
+      '
+  name: Update packages and grub
+  vars:
+    skip_package_update: false
+  when:
+  - step|int == 3
+  - not skip_package_update|bool
+- ignore_errors: true
+  name: Ensure openvswitch is running after update
+  service:
+    enabled: true
+    name: openvswitch
+    state: started
+  when: step|int == 3

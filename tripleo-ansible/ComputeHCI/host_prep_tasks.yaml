@@ -1,0 +1,678 @@
+- include_role:
+    name: tripleo_firewall
+  name: Run firewall role
+- community.general.sefcontext:
+    setype: '{{ item.setype }}'
+    state: present
+    target: '{{ item.path }}(/.*)?'
+  name: create fcontext entry for iscsi
+  with_items:
+  - path: /etc/iscsi
+    setype: container_file_t
+  - path: /etc/target
+    setype: container_file_t
+  - path: /var/lib/iscsi
+    setype: container_file_t
+- file:
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - path: /etc/iscsi
+    setype: container_file_t
+  - path: /etc/target
+    setype: container_file_t
+  - path: /var/lib/iscsi
+    setype: container_file_t
+- name: stat /lib/systemd/system/iscsid.socket
+  register: stat_iscsid_socket
+  stat: path=/lib/systemd/system/iscsid.socket
+- name: Stop and disable iscsid.socket service
+  service: name=iscsid.socket state=stopped enabled=no
+  when: stat_iscsid_socket.stat.exists
+- command: systemctl is-enabled --quiet iscsi.service
+  failed_when: false
+  name: Check if iscsi.service is enabled
+  register: iscsi_service_enabled_result
+- name: Stop iscsi.service
+  service: name=iscsi.service state=stopped enabled=no
+  when:
+  - iscsi_service_enabled_result is changed
+  - iscsi_service_enabled_result.rc == 0
+- include_role:
+    name: tripleo_kernel
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/nova
+    setype: container_file_t
+- file:
+    path: '{{ item.path }}'
+    setype: '{{ item.setype | default(omit) }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - path: /var/lib/nova
+    setype: container_file_t
+  - path: /var/lib/_nova_secontext
+    setype: container_file_t
+  - path: /var/lib/nova/instances
+    setype: container_file_t
+  - path: /var/lib/libvirt
+    setype: container_file_t
+  - path: /etc/tmpfiles.d
+- copy:
+    content: 'd /run/nova 0777 root root - -
+
+      '
+    dest: /etc/tmpfiles.d/run-nova.conf
+  name: ensure /run/nova is present upon reboot
+- command: systemd-tmpfiles --create
+  name: create tempfiles
+- mount:
+    fstype: nfs4
+    name: /var/lib/nova/instances
+    opts: _netdev,bg,{{nfs_options}},nfsvers={{nfs_vers}}
+    src: '{{nfs_share}}'
+    state: mounted
+  name: Mount Nova NFS Share
+  vars:
+    nfs_backend_enable: false
+    nfs_options: context=system_u:object_r:nfs_t:s0
+    nfs_share: ''
+    nfs_vers: '4.2'
+  when: nfs_backend_enable|bool
+- name: is Nova Resume Guests State On Host Boot enabled
+  set_fact:
+    resume_guests_state_on_host_boot_enabled: false
+- block:
+  - copy:
+      content: '[Unit]
+
+        Description=Suspend/Resume Running libvirt Guests
+
+        After=network.target
+
+        After=time-sync.target
+
+        After=virt-guest-shutdown.target
+
+        After=docker.service
+
+        After=tripleo-container-shutdown.service
+
+        After=rhel-push-plugin.service
+
+        Documentation=man:libvirtd(8)
+
+        Documentation=https://libvirt.org
+
+
+        [Service]
+
+        EnvironmentFile=-/var/lib/config-data/puppet-generated/nova_libvirt/etc/sysconfig/libvirt-guests
+
+        # Hack just call traditional service until we factor
+
+        # out the code
+
+        ExecStart=/bin/{{container_cli}} exec nova_libvirt /bin/sh -x /usr/libexec/libvirt-guests.sh
+        start
+
+        ExecStop=/bin/{{container_cli}} stop nova_compute
+
+        ExecStop=/bin/{{container_cli}}  exec nova_libvirt /bin/sh -x /usr/libexec/libvirt-guests.sh
+        stop
+
+        Type=oneshot
+
+        RemainAfterExit=yes
+
+        StandardOutput=journal+console
+
+        TimeoutStopSec=0
+
+
+        [Install]
+
+        WantedBy=multi-user.target
+
+        '
+      dest: /etc/systemd/system/libvirt-guests.service
+    name: libvirt-guests unit to stop nova_compute container before shutdown VMs
+  - copy:
+      content: '[Unit]
+
+        Description=Libvirt guests shutdown
+
+        Documentation=https://libvirt.org
+
+        '
+      dest: /etc/systemd/system/virt-guest-shutdown.target
+    name: Making sure virt-guest-shutdown.target is present
+  - name: libvirt-guests enable VM shutdown on compute reboot/shutdown
+    systemd:
+      daemon_reload: true
+      enabled: true
+      name: libvirt-guests
+  name: install libvirt-guests systemd unit file (docker)
+  when:
+  - resume_guests_state_on_host_boot_enabled|bool
+  - container_cli == 'docker'
+- block:
+  - copy:
+      content: '[Unit]
+
+        Description=Suspend libvirt Guests in tripleo
+
+        Requires=virt-guest-shutdown.target
+
+        After=systemd-machined.service
+
+        After=network-online.target
+
+        After=tripleo_nova_libvirt.target
+
+        Before=tripleo_nova_compute.service
+
+        Documentation=man:libvirtd(8)
+
+        Documentation=https://libvirt.org
+
+
+        [Service]
+
+        EnvironmentFile=-/etc/sysconfig/libvirt-guests
+
+        ExecStart=/bin/podman exec nova_libvirt /bin/rm -f /var/lib/libvirt/libvirt-guests
+
+        ExecStop=/bin/podman exec nova_libvirt /bin/sh -x /usr/libexec/libvirt-guests.sh
+        shutdown
+
+        Type=oneshot
+
+        RemainAfterExit=yes
+
+        StandardOutput=journal+console
+
+        TimeoutStopSec=0
+
+
+        [Install]
+
+        WantedBy=multi-user.target
+
+        '
+      dest: /etc/systemd/system/tripleo_nova_libvirt_guests.service
+    name: libvirt-guests unit to stop nova_compute container before shutdown VMs (monolithic
+      libvirt)
+    when: tripleo_nova_libvirt_virsh_container | default('nova_libvirt') == 'nova_libvirt'
+  - copy:
+      content: '[Unit]
+
+        Description=Suspend libvirt Guests in tripleo
+
+        Requires=virt-guest-shutdown.target
+
+        After=systemd-machined.service
+
+        After=network-online.target
+
+        After=tripleo_nova_libvirt.target
+
+        Before=tripleo_nova_compute.service
+
+        Documentation=man:libvirtd(8)
+
+        Documentation=https://libvirt.org
+
+
+        [Service]
+
+        EnvironmentFile=-/etc/sysconfig/libvirt-guests
+
+        ExecStart=/bin/podman exec nova_virtproxyd /bin/rm -f /var/lib/libvirt/libvirt-guests
+
+        ExecStop=/bin/podman exec nova_virtproxyd /bin/sh -x /usr/libexec/libvirt-guests.sh
+        shutdown
+
+        Type=oneshot
+
+        RemainAfterExit=yes
+
+        StandardOutput=journal+console
+
+        TimeoutStopSec=0
+
+
+        [Install]
+
+        WantedBy=multi-user.target
+
+        '
+      dest: /etc/systemd/system/tripleo_nova_libvirt_guests.service
+    name: libvirt-guests unit to stop nova_compute container before shutdown VMs (modular
+      libvirt)
+    when: tripleo_nova_libvirt_virsh_container | default('nova_libvirt') != 'nova_libvirt'
+  - copy:
+      content: '[Unit]
+
+        Description=Libvirt guests shutdown
+
+        Documentation=https://libvirt.org
+
+        '
+      dest: /etc/systemd/system/virt-guest-shutdown.target
+    name: Making sure virt-guest-shutdown.target is present
+  - name: tripleo_nova_libvirt_guests enable VM shutdown on compute reboot/shutdown
+    systemd:
+      daemon_reload: true
+      enabled: true
+      name: tripleo_nova_libvirt_guests
+  name: install tripleo_nova_libvirt_guests systemd unit file (podman)
+  when:
+  - resume_guests_state_on_host_boot_enabled|bool
+  - container_cli == 'podman'
+- file:
+    path: /var/lib/tripleo-config/ceph
+    state: directory
+  name: ensure ceph configurations exist
+- name: enable virt_sandbox_use_netlink for healthcheck
+  seboolean:
+    name: virt_sandbox_use_netlink
+    persistent: true
+    state: true
+  when:
+  - ansible_facts.selinux is defined
+  - ansible_facts.selinux.status == "enabled"
+- name: Do we prepend nova startup with a delay
+  set_fact:
+    nova_compute_delay: 180
+- copy:
+    content: "#!/usr/libexec/platform-python\n\"\"\"\nThis wrapper was created to\
+      \ add an optional delay to the startup of nova-compute.\nWe know that instances\
+      \ will fail to boot, after a compute reboot, if ceph is not\nhealthy.\n\nIdeally,\
+      \ we would poll ceph to get its health, but it's not guaranteed that the\ncompute\
+      \ node will have access to the keys.\n\"\"\"\n\nimport os\nimport sys\nimport\
+      \ time\nimport logging\nimport argparse\n\nparser = argparse.ArgumentParser(description='Process\
+      \ some integers.')\nparser.add_argument('--config-file', dest='nova_config',\
+      \ action='store',\n                    default=\"/etc/nova/nova.conf\",\n  \
+      \                  help='path to nova configuration (default: /etc/nova/nova.conf)')\n\
+      parser.add_argument('--nova-binary', dest='nova_binary', action='store',\n \
+      \                   default=\"/usr/bin/nova-compute\",\n                   \
+      \ help='path to nova compute binary (default: /usr/bin/nova-compute)')\nparser.add_argument('--delay',\
+      \ dest='delay', action='store',\n                    default=120, type=int,\n\
+      \                    help='Number of seconds to wait until nova-compute is started')\n\
+      parser.add_argument('--state-dir', dest='state_dir', action='store',\n     \
+      \               default=\"/run/nova/startup\", help='state-file directory')\n\
+      parser.add_argument('--state-file', dest='state_file', action='store',\n   \
+      \                 default=\"nova-compute-delayed\",\n                    help='file\
+      \ exists if we already delayed nova-compute startup')\n\n\nsections = {}\n(args,\
+      \ remaining) = parser.parse_known_args(sys.argv)\n\nreal_args = [args.nova_binary,\
+      \ '--config-file', args.nova_config]\nreal_args.extend(remaining[1:])\n\nif\
+      \ not os.path.isdir(args.state_dir):\n  os.makedirs(args.state_dir, mode = 0o751)\n\
+      \nstate_file_name = os.path.join(args.state_dir, args.state_file)\n\nif not\
+      \ os.path.isfile(state_file_name):\n    logging.info(\"Delaying nova-compute\
+      \ startup by %s seconds\" % args.delay)\n    time.sleep(args.delay)\n    open(state_file_name,\
+      \ 'a').close()\n\nlogging.info(\"Executing %s\" % real_args)\nos.execv(args.nova_binary,\
+      \ real_args)\n"
+    dest: /var/lib/nova/delay-nova-compute
+    mode: 493
+  name: install nova-compute delay wrapper script
+  when: nova_compute_delay|int > 0
+- name: Is irqbalance enabled
+  set_fact:
+    compute_irqbalance_disabled: false
+- name: disable irqbalance service on compute
+  service:
+    enabled: false
+    name: irqbalance.service
+    state: stopped
+  when: compute_irqbalance_disabled|bool
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/libvirt
+    setype: container_file_t
+- file:
+    mode: '{{ item.mode | default(omit) }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype | default(omit) }}'
+    state: directory
+  name: create libvirt persistent data directories
+  with_items:
+  - path: /etc/libvirt
+    setype: container_file_t
+  - path: /etc/libvirt/secrets
+    setype: container_file_t
+  - path: /etc/libvirt/qemu
+    setype: container_file_t
+  - path: /var/lib/libvirt
+    setype: container_file_t
+  - path: /var/cache/libvirt
+  - path: /var/lib/nova
+    setype: container_file_t
+  - path: /run/libvirt
+  - mode: '0770'
+    path: /var/log/containers/libvirt/swtpm
+    setype: container_file_t
+- group:
+    gid: 107
+    name: qemu
+    state: present
+  name: ensure qemu group is present on the host
+- name: ensure qemu user is present on the host
+  user:
+    comment: qemu user
+    group: qemu
+    name: qemu
+    shell: /sbin/nologin
+    state: present
+    uid: 107
+- file:
+    group: qemu
+    owner: qemu
+    path: /var/lib/vhost_sockets
+    setype: virt_cache_t
+    seuser: system_u
+    state: directory
+  name: create directory for vhost-user sockets with qemu ownership
+- check_mode: false
+  command: /usr/bin/rpm -q libvirt-daemon
+  failed_when: false
+  name: check if libvirt is installed
+  register: libvirt_installed
+- name: make sure libvirt services are disabled and masked
+  service:
+    daemon_reload: true
+    enabled: false
+    masked: true
+    name: '{{ item }}'
+    state: stopped
+  when: libvirt_installed.rc == 0
+  with_items:
+  - libvirtd.service
+  - virtlogd.socket
+- copy:
+    content: 'd /run/libvirt 0755 root root - -
+
+      '
+    dest: /etc/tmpfiles.d/run-libvirt.conf
+  name: ensure /run/libvirt is present upon reboot
+- name: Enable os_enable_vtpm SELinux boolean for vTPM
+  seboolean:
+    name: os_enable_vtpm
+    persistent: true
+    state: true
+  when:
+  - ansible_facts.selinux is defined
+  - ansible_facts.selinux.status == "enabled"
+- file:
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  loop:
+  - path: /run/libvirt
+    setype: virt_var_run_t
+  name: Create libvirt persistent data directories
+- name: allow logrotate to read inside containers
+  seboolean:
+    name: logrotate_read_inside_containers
+    persistent: true
+    state: true
+  when:
+  - ansible_facts.selinux is defined
+  - ansible_facts.selinux.status == "enabled"
+- block:
+  - name: Set login facts
+    no_log: true
+    set_fact:
+      container_default_pids_limit: 4096
+      container_events_logger_mechanism: journald
+      container_registry_insecure_registries: []
+      container_registry_login: false
+      container_registry_logins: {}
+      container_registry_logins_json:
+        registry.redhat.io:
+          grosenbe-redhat.com: i.am.king.bison.6591
+  - name: Convert logins json to dict
+    no_log: true
+    set_fact:
+      container_registry_logins: '{{ container_registry_logins_json | from_json }}'
+    when:
+    - container_registry_logins_json is string
+    - container_registry_login | bool
+    - (container_registry_logins_json | length) > 0
+  - name: Set registry logins
+    no_log: true
+    set_fact:
+      container_registry_logins: '{{ container_registry_logins_json }}'
+    when:
+    - container_registry_logins_json is mapping
+    - container_registry_login | bool
+    - (container_registry_logins_json | length) > 0
+  - include_role:
+      name: tripleo_podman
+      tasks_from: tripleo_podman_install.yml
+    name: Run podman install
+    vars:
+      tripleo_container_default_pids_limit: '{{ container_default_pids_limit }}'
+      tripleo_container_events_logger_mechanism: '{{ container_events_logger_mechanism
+        }}'
+      tripleo_container_registry_insecure_registries: '{{ container_registry_insecure_registries
+        }}'
+  - include_role:
+      name: tripleo_podman
+      tasks_from: tripleo_podman_login.yml
+    name: Run podman login
+    vars:
+      tripleo_container_registry_login: '{{ container_registry_login | bool }}'
+      tripleo_container_registry_logins: '{{ container_registry_logins }}'
+  name: Install and configure Podman
+- copy:
+    content: 'This file makes tripleo_container_manage generate additional systemd
+
+      dependencies for containers that have special
+
+      start/stop ordering constraints. It ensures that
+
+      those constraints are enforced on reboot/shutdown.
+
+      '
+    dest: /etc/sysconfig/podman_drop_in
+  name: Configure tripleo_container_manage to generate systemd drop-in dependencies
+- include_role:
+    name: tripleo_sshd
+  vars:
+    tripleo_sshd_banner_enabled: false
+    tripleo_sshd_banner_text: ''
+    tripleo_sshd_message_of_the_day: ''
+    tripleo_sshd_motd_enabled: false
+    tripleo_sshd_password_authentication: 'no'
+    tripleo_sshd_server_options:
+      AcceptEnv:
+      - LANG LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES
+      - LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT
+      - LC_IDENTIFICATION LC_ALL LANGUAGE
+      - XMODIFIERS
+      AuthorizedKeysFile: .ssh/authorized_keys
+      ChallengeResponseAuthentication: 'no'
+      GSSAPIAuthentication: 'no'
+      GSSAPICleanupCredentials: 'no'
+      HostKey:
+      - /etc/ssh/ssh_host_rsa_key
+      - /etc/ssh/ssh_host_ecdsa_key
+      - /etc/ssh/ssh_host_ed25519_key
+      Subsystem: sftp  /usr/libexec/openssh/sftp-server
+      SyslogFacility: AUTHPRIV
+      UseDNS: 'no'
+      UsePAM: 'yes'
+      X11Forwarding: 'yes'
+- become: true
+  failed_when: false
+  name: Check for NTP service
+  register: ntp_service_check
+  shell: systemctl is-active ntpd.service || systemctl is-enabled ntpd.service
+- name: Disable NTP before configuring Chrony
+  service:
+    enabled: false
+    name: ntpd
+    state: stopped
+  when:
+  - ntp_service_check.rc is defined
+  - ntp_service_check.rc == 0
+- include_role:
+    name: chrony
+  name: Install, Configure and Run Chrony
+- command: chronyc makestep
+  name: Force NTP sync
+- command: chronyc waitsync 30
+  name: Ensure system is NTP time synced
+- include_role:
+    name: tripleo_timezone
+  name: Run timezone role
+  vars:
+    tripleo_timezone: UTC
+- debug:
+    msg: 'CIDRs found in the ctlplane network tags.
+
+      '
+  name: Notice - ctlplane subnet is set
+- include_role:
+    name: tuned
+- file:
+    mode: '{{ item.mode|default(omit) }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/openvswitch
+    setype: container_file_t
+  - path: /var/lib/openvswitch/ovn
+    setype: container_file_t
+- copy:
+    content: "#!/usr/bin/bash\n# Cleanup neutron OVS bridges. To be called on startup\
+      \ to avoid\n# \"difficult-to-debug\" issues with partially configured resources.\n\
+      \nNEUTRON_OVS_CONF=/var/lib/config-data/puppet-generated/neutron/etc/neutron/plugins/ml2/openvswitch_agent.ini\n\
+      \nif [ -e ${NEUTRON_OVS_CONF} ];\nthen\n    INT_BRIDGE=`crudini --get ${NEUTRON_OVS_CONF}\
+      \ ovs integration_bridge`\n    TUN_BRIDGE=`crudini --get ${NEUTRON_OVS_CONF}\
+      \ ovs tunnel_bridge`\nfi\n\nfor port in `ovs-vsctl list-ports ${INT_BRIDGE:-\"\
+      br-int\"}`;\ndo\n    skip_cleanup=`ovs-vsctl --if-exists get Interface $port\
+      \ external_ids:skip_cleanup`\n    if ! [[ \"x$skip_cleanup\" == \"x\\\"true\\\
+      \"\" ]];\n    then\n        ovs-vsctl del-port ${INT_BRIDGE:-\"br-int\"} $port\n\
+      \    fi\ndone\n\novs-vsctl --if-exists del-br ${TUN_BRIDGE:-\"br-tun\"}\n\n\
+      # Clean up trunk port bridges\nfor br in $(ovs-vsctl list-br | egrep 'tbr-[0-9a-f\\\
+      -]+'); do\n    ovs-vsctl --if-exists del-br $br\ndone\n"
+    dest: /usr/libexec/neutron-cleanup
+    force: true
+    mode: '0755'
+  name: Copy in cleanup script
+- copy:
+    content: '[Unit]
+
+      Description=Neutron cleanup on startup
+
+      After=openvswitch.service network.target
+
+      Before=tripleo_neutron_ovs_agent.service tripleo_neutron_dhcp.service tripleo_neutron_l3_agent.service
+      tripleo_nova_compute.service
+
+      RefuseManualStop=yes
+
+
+      [Service]
+
+      Type=oneshot
+
+      ExecStart=/usr/libexec/neutron-cleanup
+
+
+      [Install]
+
+      WantedBy=multi-user.target
+
+      '
+    dest: /usr/lib/systemd/system/neutron-cleanup.service
+    force: true
+  name: Copy in cleanup service
+- name: Enabling the cleanup service
+  service:
+    enabled: true
+    name: neutron-cleanup
+  when: not (ansible_check_mode|bool)
+- file:
+    mode: '{{ item.mode }}'
+    path: '{{ item.path }}'
+    setype: '{{ item.setype }}'
+    state: directory
+  name: create persistent directories
+  with_items:
+  - mode: '0750'
+    path: /var/log/containers/neutron
+    setype: container_file_t
+- command: ip netns add ns_temp
+  failed_when: false
+  name: create /run/netns with temp namespace
+  register: ipnetns_add_result
+- command: ip netns delete ns_temp
+  failed_when: false
+  name: remove temp namespace
+  when:
+  - ipnetns_add_result.rc is defined
+  - ipnetns_add_result.rc == 0
+- file:
+    path: /var/lib/neutron
+    setype: container_file_t
+    state: directory
+  name: create /var/lib/neutron
+- name: set conditions
+  set_fact:
+    debug_enabled: false
+    docker_additional_sockets:
+    - /var/lib/openstack/docker.sock
+    haproxy_wrapper_enabled: true
+- file:
+    path: /var/lib/neutron/kill_scripts
+    state: directory
+  name: create kill_scripts directory within /var/lib/neutron
+- copy:
+    content: "#!/bin/bash\n{% if debug_enabled|bool -%}\nset -x\n{% endif -%}\nadd_date()\
+      \ {\n  echo \"$(date) $@\"\n}\n\n# Set up script logging for debugging purpose.\n\
+      # It will be taken care of by logrotate since there is the .log\n# suffix.\n\
+      exec 3>&1 4>&2\ntrap 'exec 2>&4 1>&3' 0 1 2 3\nexec 1>>/var/log/neutron/kill-script.log\
+      \ 2>&1\n\nSIG=$1\nPID=$2\nNETNS=$(ip netns identify ${PID})\n\nif [ \"x${NETNS}\"\
+      \ == \"x\" ]; then\n  CLI=\"nsenter --all --preserve-credentials -t 1 podman\"\
+      \n  SIG=9\nelse\n  CLI=\"nsenter --net=/run/netns/${NETNS} --preserve-credentials\
+      \ -m -t 1 podman\"\nfi\n\nkill_container() {\n  add_date \"Killing container\
+      \ $1 ($2)\"\n  signal_container $1 $2 9\n}\n\nstop_container() {\n  add_date\
+      \ \"Stopping container $1 ($2)\"\n  $CLI stop $2\n}\n\nsignal_container() {\n\
+      \  SIGNAL=$3\n  if [ -z \"$SIGNAL\" ]; then\n      SIGNAL=\"HUP\"\n  fi\n  add_date\
+      \ \"Sending signal '$SIGNAL' to $1 ($2)\"\n  $CLI kill --signal $SIGNAL $2\n\
+      }\n\ndelete_container() {\n  add_date \"Deleting container $1 ($2)\"\n  $CLI\
+      \ rm $2 || echo \"Deleting container $1 ($2) failed\"\n}\n\n\n{% raw -%}\nif\
+      \ [ -f /proc/$PID/cgroup ]; then\n  # Get container ID based on process cgroups\n\
+      \  CT_ID=$(awk 'BEGIN {FS=\".scope|-\"} /\\/libpod-/ {if ($(NF-1)) print $(NF-1);exit}'\
+      \ /proc/$PID/cgroup)\n  CT_NAME=$($CLI inspect -f '{{.Name}}' $CT_ID)\n\n  case\
+      \ $SIG in\n    HUP)\n      signal_container $CT_NAME $CT_ID\n      ;;\n    9)\n\
+      \      kill_container $CT_NAME $CT_ID\n      delete_container $CT_NAME $CT_ID\n\
+      \      ;;\n    15)\n      stop_container $CT_NAME $CT_ID\n      delete_container\
+      \ $CT_NAME $CT_ID\n      ;;\n    *)\n      add_date \"Unknown action ${SIG}\
+      \ for ${CT_NAME} ${CT_ID}\"\n      exit 1\n      ;;\n  esac\n\nelse\n  add_date\
+      \ \"No such PID: ${PID}\"\n  exit 1\nfi\n{% endraw %}\n"
+    dest: /var/lib/neutron/kill_scripts/haproxy-kill
+    mode: 493
+  name: create haproxy kill script
+  when: haproxy_wrapper_enabled|bool

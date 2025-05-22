@@ -1,0 +1,12 @@
+- block:
+  - include_role:
+      name: tripleo_run_cephadm
+      tasks_from: disable_cephadm.yml
+    name: Pause cephadm
+  name: ceph_base_external_deploy_task
+  vars:
+    external_ceph: false
+  when:
+  - (step | int) == 3
+  - false
+  - not external_ceph

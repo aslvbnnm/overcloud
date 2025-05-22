@@ -1,0 +1,100 @@
+- block:
+  - become: true
+    name: Get cinder_volume image from pacemaker
+    register: xmllint_pcmk_cinder_volume_image
+    shell: xmllint --xpath "string(//bundle[@id='openstack-cinder-volume']/podman/@image)"
+      /var/lib/pacemaker/cib/cib.xml
+  - name: Get container cinder_volume image
+    set_fact:
+      cinder_volume_image: registry.redhat.io/rhosp-rhel9/openstack-cinder-volume:17.1.6
+      cinder_volume_image_latest: cluster.common.tag/cinder-volume:pcmklatest
+      pcmk_cinder_volume_image: '{{xmllint_pcmk_cinder_volume_image.stdout}}'
+  when: step|int in [0,2]
+- block:
+  - become: true
+    name: Get haproxy image from pacemaker
+    register: xmllint_pcmk_haproxy_image
+    shell: xmllint --xpath "string(//bundle[@id='haproxy-bundle']/podman/@image)"
+      /var/lib/pacemaker/cib/cib.xml
+  - name: Get container haproxy image
+    set_fact:
+      haproxy_image: registry.redhat.io/rhosp-rhel9/openstack-haproxy:17.1.6
+      haproxy_image_latest: cluster.common.tag/haproxy:pcmklatest
+      pcmk_haproxy_image: '{{xmllint_pcmk_haproxy_image.stdout}}'
+  when: step|int in [0,2]
+- block:
+  - name: set is_haproxy_bootstrap_node fact
+    set_fact: is_haproxy_bootstrap_node={{haproxy_short_bootstrap_node_name|lower
+      == ansible_facts['hostname']|lower}}
+    tags: common
+    when:
+    - haproxy_short_bootstrap_node_name|default(false)
+  name: Set HAProxy upgrade facts
+- block:
+  - become: true
+    name: Get galera image from pacemaker
+    register: xmllint_pcmk_galera_image
+    shell: xmllint --xpath "string(//bundle[@id='galera-bundle']/podman/@image)" /var/lib/pacemaker/cib/cib.xml
+  - name: Get container galera image
+    set_fact:
+      galera_image: registry.redhat.io/rhosp-rhel9/openstack-mariadb:17.1.6
+      galera_image_latest: cluster.common.tag/mariadb:pcmklatest
+      pcmk_galera_image: '{{xmllint_pcmk_galera_image.stdout}}'
+  when: step|int in [0,2]
+- block:
+  - become: true
+    name: Get rabbitmq image from pacemaker
+    register: xmllint_pcmk_rabbitmq_image
+    shell: xmllint --xpath "string(//bundle[@id='rabbitmq-bundle']/podman/@image)"
+      /var/lib/pacemaker/cib/cib.xml
+  - name: Get container rabbitmq image
+    set_fact:
+      pcmk_rabbitmq_image: '{{xmllint_pcmk_rabbitmq_image.stdout}}'
+      rabbitmq_image: registry.redhat.io/rhosp-rhel9/openstack-rabbitmq:17.1.6
+      rabbitmq_image_latest: cluster.common.tag/rabbitmq:pcmklatest
+  when: step|int in [0,2]
+- name: Check swift containers log folder/symlink exists
+  register: swift_log_link
+  stat:
+    path: /var/log/containers/swift
+- file:
+    path: /var/log/containers/swift
+    state: absent
+  name: Delete if symlink
+  when: swift_log_link.stat.islnk is defined and swift_log_link.stat.islnk
+- name: Check for existing yum.pid
+  register: yum_pid_file
+  stat: path=/run/yum.pid
+  when: step|int == 0 or step|int == 3
+- fail: msg="ERROR existing yum.pid detected - can't continue! Please ensure there
+    is no other package update process for the duration of the minor update worfklow.
+    Exiting."
+  name: Exit if existing yum process
+  when: (step|int == 0 or step|int == 3) and yum_pid_file.stat.exists
+- block:
+  - name: Update all packages
+    yum:
+      exclude: ansible-core
+      name: '*'
+      state: latest
+  - command: grub2-mkconfig -o /boot/grub2/grub.cfg
+    name: Generate grub config
+  - name: Find and replace grub.cfg
+    shell: 'set -o pipefail
+
+      find /boot/efi/EFI/ -name ''grub.cfg'' | xargs -i grub2-mkconfig -o {}
+
+      '
+  name: Update packages and grub
+  vars:
+    skip_package_update: false
+  when:
+  - step|int == 3
+  - not skip_package_update|bool
+- ignore_errors: true
+  name: Ensure openvswitch is running after update
+  service:
+    enabled: true
+    name: openvswitch
+    state: started
+  when: step|int == 3

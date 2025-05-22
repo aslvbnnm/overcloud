@@ -1,0 +1,36 @@
+100 cinder_haproxy_frontend_ssl:
+  dport:
+  - 13776
+100 glance_api_haproxy_frontend_ssl:
+  dport:
+  - 13292
+100 heat_api_cfn_haproxy_frontend_ssl:
+  dport:
+  - 13005
+100 heat_api_haproxy_frontend_ssl:
+  dport:
+  - 13004
+100 horizon_haproxy_frontend_ssl:
+  dport:
+  - 443
+100 keystone_public_haproxy_frontend_ssl:
+  dport:
+  - 13000
+100 neutron_haproxy_frontend_ssl:
+  dport:
+  - 13696
+100 nova_metadatahaproxy_frontend_ssl:
+  dport:
+  - 13775
+100 nova_osapi_haproxy_frontend_ssl:
+  dport:
+  - 13774
+100 nova_vncproxy_haproxy_frontend_ssl:
+  dport:
+  - 13080
+100 placement_haproxy_frontend_ssl:
+  dport:
+  - 13778
+100 swift_proxy_server_haproxy_frontend_ssl:
+  dport:
+  - 13808

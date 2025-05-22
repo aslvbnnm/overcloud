@@ -1,0 +1,4 @@
+# This disables network configuration entirely (No-op).
+resource_registry:
+  OS::TripleO::Controller::Net::SoftwareConfig: OS::Heat::None
+  OS::TripleO::ComputeHCI::Net::SoftwareConfig: OS::Heat::None
